@@ -23,25 +23,31 @@ TRACK_SEGMENTS = [
     ("corner", 150, 60, -1, "perfect"),            # 2 号弯：完美右弯
     ("straight", 500, None, 0, "long_straight"),
     ("corner", 200, 55, 1, "brake_early"),         # 3 号弯：刹车过早
+    ("straight", 180, None, 0, "short_chute"),     # ← 插入短直道，避免与4号弯合并
     ("corner", 140, 40, -1, "oversteer_exit"),     # 4 号弯：出弯甩尾
     ("straight", 320, None, 0, "medium_straight"),
     ("corner", 220, 80, 1, "perfect"),             # 5 号弯：高速左弯，完美
+    ("straight", 150, None, 0, "short_chute"),     # ← 插入短直道，避免与6号弯合并
     ("corner", 120, 35, -1, "brake_late"),         # 6 号弯：刹车过晚
     ("straight", 280, None, 0, "short_straight"),
     ("corner", 170, 50, 1, "missed_apex"),         # 7 号弯：错过弯心
+    ("straight", 120, None, 0, "short_chute"),     # ← 插入短直道，避免与8号弯合并
     ("corner", 130, 42, -1, "over_slow"),          # 8 号弯：过度减速
     ("straight", 600, None, 0, "back_straight"),
     ("corner", 190, 70, 1, "perfect"),             # 9 号弯：完美
     ("straight", 200, None, 0, "short_straight"),
     ("corner", 160, 48, -1, "throttle_choppy"),    # 10 号弯：油门断续
+    ("straight", 100, None, 0, "short_chute"),     # ← 插入短直道，避免与11号弯合并
     ("corner", 110, 32, 1, "oversteer_exit"),      # 11 号弯：出弯甩尾
     ("straight", 350, None, 0, "medium_straight"),
     ("corner", 210, 65, -1, "perfect"),            # 12 号弯：高速右弯
     ("straight", 240, None, 0, "short_straight"),
     ("corner", 140, 38, 1, "understeer_light"),    # 13 号弯：轻微推头
+    ("straight", 130, None, 0, "short_chute"),     # ← 插入短直道，避免与14号弯合并
     ("corner", 180, 52, -1, "brake_early"),        # 14 号弯：刹车过早
     ("straight", 380, None, 0, "medium_straight"),
     ("corner", 200, 58, 1, "missed_apex"),         # 15 号弯：错过弯心
+    ("straight", 110, None, 0, "short_chute"),     # ← 插入短直道，避免与16号弯合并
     ("corner", 150, 44, -1, "perfect"),            # 16 号弯：完美收尾
     ("straight", 300, None, 0, "pit_straight"),
 ]
