@@ -186,16 +186,16 @@ def _physics_based_scoring(
     if len(long_g_entry) > 0:
         max_brake = np.abs(long_g_entry.clip(max=0)).max()
         # 理想：入弯有持续且平滑的刹车，然后逐渐释放（Trail-braking）
-        if max_brake > 0.15:
+        if max_brake > 0.3:
             braking_score += 10.0
             # 检查刹车是否过早结束（Trail-braking 不足）
             brake_end_idx = np.where(long_g_entry < -0.05)[0]
             if len(brake_end_idx) > 0:
                 last_brake = brake_end_idx[-1]
-                if last_brake < len(long_g_entry) * 0.20:
+                if last_brake < len(long_g_entry) * 0.3:
                     braking_score -= 20.0
                     brake_too_early = True
-                elif last_brake > len(long_g_entry) * 0.98:
+                elif last_brake > len(long_g_entry) * 0.9:
                     braking_score -= 15.0
                     brake_too_late = True
         else:
@@ -229,7 +229,7 @@ def _physics_based_scoring(
             if 0.15 <= speed_drop_ratio <= 0.40:
                 mid_speed_score += 20.0
             elif speed_drop_ratio > 0.55:
-                mid_speed_score -= 35.0
+                mid_speed_score -= 25.0
                 over_slow = True
             elif speed_drop_ratio < 0.05:
                 mid_speed_score -= 10.0  # 几乎没减速，可能错过了刹车点
@@ -252,7 +252,7 @@ def _physics_based_scoring(
             if len(accel) > 2:
                 accel_std = accel.std()
                 if accel_std > 0.15:
-                    throttle_score -= 25.0
+                    throttle_score -= 20.0
                     throttle_choppy = True
 
             # 过早全油门导致打滑
@@ -265,7 +265,7 @@ def _physics_based_scoring(
             # 如果出弯开始就有很大油门且侧向 G 也很高 -> 可能 understeer
             if len(latg) > exit_start_rel:
                 early_latg = latg[exit_start_rel:exit_start_rel + max(1, len(latg[exit_start_rel:]) // 2)]
-                if early_latg.mean() > 0.85 and accel[:len(early_latg)].mean() > 0.3:
+                if early_latg.mean() > 0.6 and accel[:len(early_latg)].mean() > 0.3:
                     throttle_score -= 10.0
         else:
             throttle_score -= 15.0  # 出弯不敢给油
@@ -281,7 +281,7 @@ def _physics_based_scoring(
     # 走线精准度综合了转向平滑度和弯心位置
     if len(steer) > 0:
         steer_smoothness = 1.0 / (1.0 + steer.std() * 0.1)
-        racing_line_score += (steer_smoothness - 0.5) * 50.0
+        racing_line_score += (steer_smoothness - 0.5) * 30.0
 
     # 弯心速度是否是最低点（判断有没有错过弯心）
     if len(speed) > 0:
@@ -289,16 +289,16 @@ def _physics_based_scoring(
         apex_start = entry_end_rel
         apex_end = exit_start_rel
         if not (apex_start <= global_min_idx <= apex_end):
-            racing_line_score -= 30.0
+            racing_line_score -= 20.0
             missed_apex = True
 
-    # 侧向 G 的利用率：理想情况下应接近但不超过轮胎极限 (约 1.0-2.0g)
+    # 侧向 G 的利用率：理想情况下应接近但不超过轮胎极限 (约 1.0-1.5g)
     if len(latg) > 0:
         max_lat = float(np.abs(latg).max())
-        if max_lat < 0.15:
+        if max_lat < 0.3:
             racing_line_score -= 15.0  # 完全没有利用轮胎
-        elif max_lat > 2.5:
-            racing_line_score -= 20.0  # 可能超出极限
+        elif max_lat > 1.8:
+            racing_line_score -= 10.0  # 可能超出极限
         else:
             racing_line_score += 10.0
 
