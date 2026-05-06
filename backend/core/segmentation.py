@@ -90,16 +90,19 @@ def segment_track(
         raise ValueError("数据过短，无法完成赛道切分。")
 
     # 构建转向指示信号
-    # 条件：(|yaw| > yaw_threshold) AND (|lat_g| > g_threshold) AND (|steer| > 5 deg)
+    # 条件：(|yaw| > yaw_threshold) AND (|lat_g| > g_threshold) AND (|steer| > threshold)
     turning = np.zeros(n, dtype=bool)
     if yaw_col and latg_col and steer_col:
         yaw = df[yaw_col].fillna(0).to_numpy()
         latg = df[latg_col].fillna(0).to_numpy()
         steer = df[steer_col].fillna(0).to_numpy()
+        # 自动检测 steering 量纲：归一化 [-1,1] 或角度 [-360,360]
+        steer_abs_max = float(np.nanmax(np.abs(steer))) if len(steer) > 0 else 0.0
+        steer_threshold = 0.05 if steer_abs_max <= 1.5 else 5.0
         turning = (
             (np.abs(yaw) > yaw_threshold)
             & (np.abs(latg) > g_threshold)
-            & (np.abs(steer) > 5.0)
+            & (np.abs(steer) > steer_threshold)
         )
     elif yaw_col and latg_col:
         yaw = df[yaw_col].fillna(0).to_numpy()

@@ -29,6 +29,102 @@ def _find_column(candidates: list, df_cols: list) -> Optional[str]:
     return None
 
 
+def _derive_features(
+    df: pd.DataFrame,
+    col_mapping: Dict[str, str],
+    time_col: Optional[str],
+) -> None:
+    """
+    从原始传感器列计算派生动力学特征，并写入 df 与 col_mapping。
+    支持真实遥测数据（如 Assetto Corsa / F1 导出格式）。
+    """
+    if time_col is None or time_col not in df.columns:
+        return
+
+    t = df[time_col].values
+    # 处理重复/倒退时间戳，避免 gradient 除以零
+    for i in range(1, len(t)):
+        if t[i] <= t[i - 1]:
+            t[i] = t[i - 1] + 1e-4
+    dt = np.diff(t)
+    dt[dt == 0] = 1e-4
+
+    # 1) speed ── 从速度分量计算
+    vx_col = col_mapping.get("velocity_x") or _find_column(
+        ["velocity_x", "vel_x", "worldvelocityx", "velocityx"], df.columns
+    )
+    vy_col = col_mapping.get("velocity_y") or _find_column(
+        ["velocity_y", "vel_y", "worldvelocityy", "velocityy"], df.columns
+    )
+    vz_col = col_mapping.get("velocity_z") or _find_column(
+        ["velocity_z", "vel_z", "worldvelocityz", "velocityz"], df.columns
+    )
+    if vx_col and vz_col:
+        vx = df[vx_col].fillna(0).values
+        vy = df[vy_col].fillna(0).values if vy_col else np.zeros(len(df))
+        vz = df[vz_col].fillna(0).values
+        speed = np.sqrt(vx ** 2 + vy ** 2 + vz ** 2)
+        df["_derived_speed"] = speed
+        col_mapping["speed"] = "_derived_speed"
+
+    # 2) yaw_rate ── 从 world_right 向量旋转计算
+    rx_col = _find_column(
+        ["world_right_x", "right_x", "worldrightx"], df.columns
+    )
+    rz_col = _find_column(
+        ["world_right_z", "right_z", "worldrightz"], df.columns
+    )
+    if rx_col and rz_col:
+        rx = df[rx_col].fillna(0).values
+        rz = df[rz_col].fillna(0).values
+        # 平滑以减少噪声
+        rx_s = pd.Series(rx).rolling(3, center=True, min_periods=1).mean().values
+        rz_s = pd.Series(rz).rolling(3, center=True, min_periods=1).mean().values
+        drx = np.gradient(rx_s, t)
+        drz = np.gradient(rz_s, t)
+        yaw_rate = rx_s * drz - rz_s * drx
+        yaw_rate = np.clip(yaw_rate, -5.0, 5.0)
+        df["_derived_yaw_rate"] = yaw_rate
+        col_mapping["yaw_rate"] = "_derived_yaw_rate"
+
+    # 3) lateral_g ── 优先使用已有的 gforce_Y（裁剪异常值）
+    lat_col = col_mapping.get("lateral_g") or col_mapping.get("lat_g")
+    if lat_col and lat_col in df.columns:
+        lat_g = df[lat_col].fillna(0).values
+        lat_g = np.clip(lat_g, -5.0, 5.0)
+        df["_derived_lat_g"] = lat_g
+        col_mapping["lateral_g"] = "_derived_lat_g"
+        col_mapping["lat_g"] = "_derived_lat_g"
+    elif "speed" in col_mapping:
+        # fallback: lat_g = yaw_rate * speed / 9.81
+        speed_vals = df[col_mapping["speed"]].fillna(0).values
+        if "yaw_rate" in col_mapping:
+            yaw_vals = df[col_mapping["yaw_rate"]].fillna(0).values
+            lat_g = np.clip(yaw_vals * speed_vals / 9.81, -5.0, 5.0)
+            df["_derived_lat_g"] = lat_g
+            col_mapping["lateral_g"] = "_derived_lat_g"
+            col_mapping["lat_g"] = "_derived_lat_g"
+
+    # 4) long_g ── 从速度变化率计算
+    if "speed" in col_mapping:
+        speed_vals = df[col_mapping["speed"]].fillna(0).values
+        long_g = np.gradient(speed_vals, t) / 9.81
+        long_g = np.clip(long_g, -5.0, 5.0)
+        df["_derived_long_g"] = long_g
+        col_mapping["long_g"] = "_derived_long_g"
+        col_mapping["longitudinal_g"] = "_derived_long_g"
+
+    # 5) slip_ratio ── 简化估计：高侧向 G + 高转向 = 有滑移
+    if "lateral_g" in col_mapping and "steering" in col_mapping:
+        lat_vals = np.abs(df[col_mapping["lateral_g"]].fillna(0).values)
+        steer_vals = np.abs(df[col_mapping["steering"]].fillna(0).values)
+        # 滑移率简化模型：与侧向负载和转向输入正相关
+        slip = np.clip((lat_vals - 0.5) * 0.3 + steer_vals * 0.5, 0.0, 1.0)
+        df["_derived_slip"] = slip
+        col_mapping["slip_ratio"] = "_derived_slip"
+        col_mapping["slip"] = "_derived_slip"
+
+
 def parse_telemetry_csv(file_bytes: bytes) -> Dict[str, Any]:
     """
     解析上传的 CSV 遥测文件。
@@ -132,6 +228,10 @@ def parse_telemetry_csv(file_bytes: bytes) -> Dict[str, Any]:
     # 提取特征矩阵 (用于模型输入)
     from models.corner_net import TelemetryFeatureExtractor
     col_mapping = TelemetryFeatureExtractor.normalize_columns(df.columns)
+
+    # ── 计算派生动力学特征（真实遥测数据通常只有原始传感器值） ──
+    _derive_features(df, col_mapping, time_col)
+
     features = TelemetryFeatureExtractor.extract_sequence(df, col_mapping, seq_len=128)
     # 兼容 torch Tensor 和 numpy ndarray
     if hasattr(features, 'numpy'):

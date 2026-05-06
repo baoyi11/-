@@ -1,0 +1,34 @@
+{
+  "n_features": 10,
+  "feature_names": [
+    "speed",
+    "lateral_g",
+    "long_g",
+    "yaw_rate",
+    "steering",
+    "throttle",
+    "brake",
+    "slip_ratio",
+    "gear",
+    "rpm"
+  ],
+  "sequence_length": 50,
+  "n_classes": 3,
+  "class_names": [
+    "understeer",
+    "oversteer",
+    "perfect"
+  ],
+  "train_samples": 4344,
+  "val_samples": 508,
+  "train_dist": [
+    1448,
+    1448,
+    1448
+  ],
+  "val_dist": [
+    262,
+    62,
+    184
+  ]
+}

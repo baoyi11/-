@@ -7,6 +7,7 @@ corner_net.py
 """
 
 from typing import Tuple, Optional
+import os
 import numpy as np
 
 try:
@@ -109,27 +110,47 @@ class TelemetryFeatureExtractor:
     """
     遥测数据特征提取器。
     将原始 CSV 列映射为模型输入张量/数组。
+    支持 10 维真实遥测特征。
     """
 
     FEATURE_COLUMNS = [
         "speed",
-        "yaw_rate",
-        "lat_g",
+        "lateral_g",
         "long_g",
-        "steering_angle",
+        "yaw_rate",
+        "steering",
+        "throttle",
+        "brake",
         "slip_ratio",
+        "gear",
+        "rpm",
     ]
 
-    def __init__(self, seq_len: int = 60):
+    def __init__(self, seq_len: int = 50, scaler_path: str | None = None):
         self.seq_len = seq_len
+        self.scaler = None
+        if scaler_path and os.path.exists(scaler_path):
+            import pickle
+            with open(scaler_path, "rb") as f:
+                self.scaler = pickle.load(f)
+
+    def _normalize(self, mat: np.ndarray) -> np.ndarray:
+        """使用训练时保存的 StandardScaler 或在线 z-score 归一化。"""
+        if self.scaler is not None:
+            # scaler 期望 (n_samples, n_features)
+            orig_shape = mat.shape
+            flat = mat.reshape(-1, orig_shape[-1])
+            flat = self.scaler.transform(flat)
+            return flat.reshape(orig_shape)
+        mean = np.mean(mat, axis=0, keepdims=True)
+        std = np.std(mat, axis=0, keepdims=True) + 1e-6
+        return (mat - mean) / std
 
     def extract(self, df) -> np.ndarray:
         """
         从 pandas DataFrame 中提取特征矩阵。
-        返回 shape: (n_samples, seq_len, n_features) 的 numpy 数组。
+        返回 shape: (n_windows, seq_len, n_features) 的 numpy 数组。
         """
-        import pandas as pd
-
         features = []
         for col in self.FEATURE_COLUMNS:
             if col in df.columns:
@@ -138,20 +159,14 @@ class TelemetryFeatureExtractor:
                 features.append(np.zeros(len(df)))
 
         mat = np.stack(features, axis=1).astype(np.float32)
+        mat = self._normalize(mat)
 
-        # 归一化 (z-score)
-        mean = np.mean(mat, axis=0, keepdims=True)
-        std = np.std(mat, axis=0, keepdims=True) + 1e-6
-        mat = (mat - mean) / std
-
-        # 滑动窗口切分
         windows = []
         step = max(1, len(mat) // 20)
         for i in range(0, len(mat) - self.seq_len + 1, step):
             windows.append(mat[i : i + self.seq_len])
 
         if not windows:
-            # 数据太短，直接 pad
             if len(mat) < self.seq_len:
                 pad = np.zeros((self.seq_len - len(mat), mat.shape[1]), dtype=np.float32)
                 windows.append(np.concatenate([mat, pad], axis=0))
@@ -172,16 +187,19 @@ class TelemetryFeatureExtractor:
         将原始列名映射为标准化特征名。
         返回字典 {标准化名: 原始列名}。
         """
-        import pandas as pd
         col_list = list(columns)
         mapping = {}
         aliases = {
             "speed": ["speed", "velocity", "vel", "spd", "km/h", "mph"],
+            "lateral_g": ["lateral_g", "lat_g", "lat_acc", "g_lat", "g_force_lat", "gforce_y", "gforce_y", "ay", "gy"],
+            "long_g": ["long_g", "longitudinal_g", "long_acc", "g_long", "g_force_long", "ax", "gx"],
             "yaw_rate": ["yaw_rate", "yawrate", "yaw", "yaw_speed"],
-            "lat_g": ["lat_g", "lateral_g", "lat_acc", "g_lat", "g_force_lat", "ay"],
-            "long_g": ["long_g", "longitudinal_g", "long_acc", "g_long", "g_force_long", "ax"],
-            "steering_angle": ["steering_angle", "steer", "steering", "wheel_angle", "steer_deg"],
+            "steering": ["steering", "steer", "steering_angle", "wheel_angle", "steer_deg"],
+            "throttle": ["throttle", "throttle_input", "gas"],
+            "brake": ["brake", "brake_input"],
             "slip_ratio": ["slip_ratio", "slip", "sliprate", "tire_slip"],
+            "gear": ["gear", "gear_num"],
+            "rpm": ["rpm", "engine_rpm", "revs"],
         }
         for std_name, aliases_list in aliases.items():
             for col in col_list:
@@ -192,7 +210,7 @@ class TelemetryFeatureExtractor:
         return mapping
 
     @classmethod
-    def extract_sequence(cls, df, col_mapping, seq_len=128):
+    def extract_sequence(cls, df, col_mapping, seq_len=50, scaler_path: str | None = None):
         """
         从 DataFrame 中提取固定长度的特征序列，用于模型输入。
         返回 numpy ndarray 或 torch Tensor。
@@ -207,12 +225,10 @@ class TelemetryFeatureExtractor:
 
         mat = np.stack(features, axis=1).astype(np.float32)
 
-        # z-score 归一化
-        mean = np.mean(mat, axis=0, keepdims=True)
-        std = np.std(mat, axis=0, keepdims=True) + 1e-6
-        mat = (mat - mean) / std
+        # 归一化
+        extractor = cls(seq_len=seq_len, scaler_path=scaler_path)
+        mat = extractor._normalize(mat)
 
-        # 如果数据长度不足 seq_len，进行 pad；如果超过，均匀采样
         if len(mat) < seq_len:
             pad = np.zeros((seq_len - len(mat), mat.shape[1]), dtype=np.float32)
             mat = np.concatenate([mat, pad], axis=0)
@@ -220,7 +236,6 @@ class TelemetryFeatureExtractor:
             indices = np.linspace(0, len(mat) - 1, seq_len, dtype=np.int32)
             mat = mat[indices]
 
-        # 增加 batch 维度 -> (1, seq_len, n_features)
         mat = np.expand_dims(mat, axis=0)
 
         if _HAS_TORCH and torch is not None:
@@ -229,7 +244,7 @@ class TelemetryFeatureExtractor:
 
 
 def build_model(
-    input_dim: int = 6,
+    input_dim: int = 10,
     hidden_dim: int = 64,
     num_layers: int = 2,
     num_classes: int = 3,

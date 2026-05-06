@@ -34,14 +34,24 @@ def load_model(device: str = "cpu") -> any:
     """加载预训练的 LSTM 模型"""
     if not _MODEL_HAS_TORCH:
         return None
-    model = build_model(device=device)
+    model = build_model(
+        input_dim=10,
+        hidden_dim=128,
+        num_layers=2,
+        num_classes=3,
+        dropout=0.4,
+        device=device,
+    )
     if model is None:
         return None
     try:
         model.load_state_dict(torch.load(MODEL_PATH, map_location=device, weights_only=True))
         model.eval()
+        print("[Model] Loaded successfully from", MODEL_PATH)
     except FileNotFoundError:
-        pass
+        print("[Model] File not found:", MODEL_PATH)
+    except Exception as e:
+        print("[Model] Load failed:", str(e))
     return model
 
 
@@ -80,7 +90,8 @@ def evaluate_corner(
     """
     # 构建模型输入
     corner_df = df.iloc[seg.start_idx:seg.end_idx + 1].copy()
-    features = TelemetryFeatureExtractor.extract_sequence(corner_df, col_mapping, seq_len=128)
+    scaler_path = "processed/scaler.pkl"
+    features = TelemetryFeatureExtractor.extract_sequence(corner_df, col_mapping, seq_len=50, scaler_path=scaler_path)
     if _MODEL_HAS_TORCH and torch is not None and isinstance(features, torch.Tensor):
         features = features.to(device)
 
@@ -139,11 +150,11 @@ def _physics_based_scoring(
                 return c
         return None
 
-    speed_col = find_col("speed")
-    latg_col = find_col("lat_g")
-    long_g_col = find_col("long_g")
-    steer_col = find_col("steering_angle")
-    slip_col = find_col("slip_ratio")
+    speed_col = find_col("speed") or find_col("velocity")
+    latg_col = find_col("lateral_g") or find_col("lat_g")
+    long_g_col = find_col("long_g") or find_col("longitudinal_g")
+    steer_col = find_col("steering") or find_col("steering_angle")
+    slip_col = find_col("slip_ratio") or find_col("slip")
 
     s_idx, e_idx = seg.start_idx, seg.end_idx
     n = e_idx - s_idx + 1
