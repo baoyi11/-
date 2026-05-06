@@ -423,61 +423,77 @@ export default function TrackMap({
             <X className="w-4 h-4 text-slate-300" />
           </button>
         )}
+      </div>
 
-        {/* 选中弯道详情浮层 */}
-        {modalCorner && (
-          <div className="absolute bottom-3 right-3 left-3 sm:left-auto sm:w-80 bg-slate-900/95 backdrop-blur border border-slate-700 rounded-xl p-4 shadow-2xl z-10">
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-3">
-                <div
-                  className="w-12 h-12 rounded-xl flex items-center justify-center text-xl font-black shrink-0"
-                  style={{
-                    backgroundColor: scoreToColor(modalCorner.scores.total) + '20',
-                    color: scoreToColor(modalCorner.scores.total),
-                    border: `2px solid ${scoreToColor(modalCorner.scores.total)}`,
-                  }}
-                >
-                  {Math.round(modalCorner.scores.total)}
-                </div>
-                <div>
-                  <h3 className="text-sm font-bold text-slate-100">
-                    弯道 #{modalCorner.corner_id}
-                  </h3>
-                  <p className="text-xs font-bold" style={{ color: scoreToColor(modalCorner.scores.total) }}>
-                    {scoreToLabel(modalCorner.scores.total)}
-                  </p>
-                </div>
-              </div>
+      {/* 弯道详情弹窗 */}
+      {modalCorner && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+          onClick={() => setModalCorner(null)}
+        >
+          <div
+            className="bg-slate-900 border border-slate-700 rounded-2xl p-6 max-w-md w-full shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-bold text-slate-100">
+                弯道 #{modalCorner.corner_id}
+              </h3>
               <button
                 onClick={() => setModalCorner(null)}
-                className="w-7 h-7 rounded-lg bg-slate-800 border border-slate-700 flex items-center justify-center hover:bg-slate-700 transition-colors shrink-0"
+                className="w-8 h-8 rounded-lg bg-slate-800 border border-slate-700 flex items-center justify-center hover:bg-slate-700 transition-colors"
               >
-                <X className="w-3.5 h-3.5 text-slate-400" />
+                <X className="w-4 h-4 text-slate-400" />
               </button>
             </div>
 
-            {modalCorner.ai_class && (
-              <p className="text-[11px] text-slate-500 mb-2">
-                AI 分类: <span className="text-slate-300">{modalCorner.ai_class}</span>
-              </p>
-            )}
-
-            <div className="bg-slate-800/50 rounded-lg p-3 border border-slate-700/50 mb-3">
-              <p className="text-xs text-slate-300 leading-relaxed">{modalCorner.one_liner}</p>
+            <div className="flex items-center gap-4 mb-4">
+              <div
+                className="w-20 h-20 rounded-2xl flex items-center justify-center text-3xl font-black shadow-lg"
+                style={{
+                  backgroundColor: scoreToColor(modalCorner.scores.total) + '20',
+                  color: scoreToColor(modalCorner.scores.total),
+                  border: `2px solid ${scoreToColor(modalCorner.scores.total)}`,
+                }}
+              >
+                {Math.round(modalCorner.scores.total)}
+              </div>
+              <div>
+                <p className="text-2xl font-bold" style={{ color: scoreToColor(modalCorner.scores.total) }}>
+                  {scoreToLabel(modalCorner.scores.total)}
+                </p>
+                {modalCorner.ai_class && (
+                  <p className="text-xs text-slate-500 mt-1">
+                    AI 分类: <span className="text-slate-300">{modalCorner.ai_class}</span>
+                  </p>
+                )}
+              </div>
             </div>
 
-            <button
-              onClick={() => {
-                if (onCornerSelect) onCornerSelect(modalCorner);
-                setModalCorner(null);
-              }}
-              className="w-full py-2 rounded-lg bg-cyan-600/80 hover:bg-cyan-500 text-white text-xs font-semibold transition-colors"
-            >
-              查看完整详情
-            </button>
+            <div className="bg-slate-800/50 rounded-xl p-4 border border-slate-700/50">
+              <p className="text-sm text-slate-300 leading-relaxed">{modalCorner.one_liner}</p>
+            </div>
+
+            <div className="mt-4 flex gap-2">
+              <button
+                onClick={() => {
+                  if (onCornerSelect) onCornerSelect(modalCorner);
+                  setModalCorner(null);
+                }}
+                className="flex-1 py-2.5 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white text-sm font-semibold transition-colors"
+              >
+                查看完整详情
+              </button>
+              <button
+                onClick={() => setModalCorner(null)}
+                className="px-4 py-2.5 rounded-lg bg-slate-800 border border-slate-700 text-slate-300 text-sm font-semibold hover:bg-slate-700 transition-colors"
+              >
+                关闭
+              </button>
+            </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }
