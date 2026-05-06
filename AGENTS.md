@@ -1,65 +1,86 @@
-# 项目上下文
+# 赛道级虚拟赛车教练 (TrackMaster AI Coach)
 
-### 版本技术栈
+## 项目概览
+基于时序遥测数据的弯道动态评价系统。用户上传赛车游戏 CSV 遥测数据，系统自动切分弯道、评估驾驶表现并生成专业且幽默的反馈。
 
-- **Framework**: Next.js 16 (App Router)
-- **Core**: React 19
-- **Language**: TypeScript 5
+## 版本技术栈
+- **Framework**: Next.js 16 (App Router) + FastAPI (Python)
+- **Core**: React 19, TypeScript 5, Python 3.12
 - **UI 组件**: shadcn/ui (基于 Radix UI)
 - **Styling**: Tailwind CSS 4
+- **可视化**: Plotly.js, react-leaflet
+- **AI 模型**: PyTorch (LSTM, 可选依赖)
 
 ## 目录结构
 
 ```
-├── public/                 # 静态资源
-├── scripts/                # 构建与启动脚本
-│   ├── build.sh            # 构建脚本
-│   ├── dev.sh              # 开发环境启动脚本
-│   ├── prepare.sh          # 预处理脚本
-│   └── start.sh            # 生产环境启动脚本
+├── backend/                 # FastAPI 后端与 AI 模型
+│   ├── core/                # 业务逻辑
+│   │   ├── parser.py        # CSV 遥测数据解析
+│   │   ├── segmentation.py  # 弯道自动切分算法
+│   │   ├── evaluator.py     # 物理规则评分 + AI 推理
+│   │   └── feedback.py      # 趣味文案生成
+│   ├── models/
+│   │   └── corner_net.py    # PyTorch LSTM 模型定义
+│   ├── main.py              # FastAPI 入口
+│   ├── train.py             # Mock 数据生成 + 模型训练
+│   ├── generate_mock_csv.py # 测试数据生成器
+│   └── requirements.txt     # Python 依赖
 ├── src/
-│   ├── app/                # 页面路由与布局
-│   ├── components/ui/      # Shadcn UI 组件库
-│   ├── hooks/              # 自定义 Hooks
-│   ├── lib/                # 工具库
-│   │   └── utils.ts        # 通用工具函数 (cn)
-│   └── server.ts           # 自定义服务端入口
-├── next.config.ts          # Next.js 配置
-├── package.json            # 项目依赖管理
-└── tsconfig.json           # TypeScript 配置
+│   ├── app/
+│   │   ├── api/py/[...path]/route.ts  # Next.js → FastAPI 代理
+│   │   ├── page.tsx         # 主页面
+│   │   └── layout.tsx
+│   ├── components/
+│   │   ├── ui/              # shadcn/ui 组件
+│   │   ├── UploadZone.tsx   # CSV 拖拽上传
+│   │   ├── RadarChart.tsx   # 多维雷达图 (Recharts)
+│   │   ├── telemetry/
+│   │   │   ├── FrictionCircle.tsx  # Plotly G值摩擦圆
+│   │   │   └── TelemetryCharts.tsx # Plotly 时序折线图
+│   │   ├── track/
+│   │   │   └── TrackMap.tsx        # Leaflet 轨迹热力图
+│   │   └── feedback/
+│   │       ├── FeedbackPanel.tsx   # 总评与文案
+│   │       └── CornerDetailPanel.tsx # 单弯道详情
+│   ├── server.ts            # 自定义 Next.js 服务器 (同时启动 FastAPI)
+│   └── lib/
+│       └── utils.ts         # cn 工具函数
+├── scripts/
+│   ├── dev.sh, build.sh, start.sh
+├── .coze                    # 沙箱部署配置 (勿改)
+├── next.config.ts
+└── package.json
 ```
 
-- 项目文件（如 app 目录、pages 目录、components 等）默认初始化到 `src/` 目录下。
+## 构建和测试命令
+- **前端开发**: `pnpm dev` (tsx watch src/server.ts，自动启动 FastAPI)
+- **前端构建**: `pnpm build`
+- **TypeScript 检查**: `pnpm ts-check`
+- **Lint 检查**: `pnpm lint:build`
+- **Python 依赖**: `pip3 install -r backend/requirements.txt`
+- **模型训练**: `cd backend && python3 train.py`
 
-## 包管理规范
+## 服务架构
+- **Next.js 自定义服务器** (`src/server.ts`) 监听 5000 端口
+- **FastAPI** (`backend/main.py`) 监听 8000 端口
+- Next.js API Route `/api/py/[...path]` 将请求代理到 FastAPI
+- 开发模式下，server.ts 自动 `spawn` 启动 Python 后端
 
-**仅允许使用 pnpm** 作为包管理器，**严禁使用 npm 或 yarn**。
-**常用命令**：
-- 安装依赖：`pnpm add <package>`
-- 安装开发依赖：`pnpm add -D <package>`
-- 安装所有依赖：`pnpm install`
-- 移除依赖：`pnpm remove <package>`
+## 代码风格指南
+- TypeScript strict 模式，禁止隐式 `any`
+- React 组件使用函数式组件 + Hooks
+- Python 代码使用类型注解 (PEP 484)
+- Plotly 图表组件需使用 `use client` 指令
 
-## 开发规范
+## 测试说明
+- 后端测试数据: `backend/generate_mock_csv.py` 生成 `mock_telemetry.csv`
+- API 冒烟测试:
+  - `GET /api/py/health`
+  - `POST /api/py/upload` (multipart/form-data)
+  - `POST /api/py/analyze` (multipart/form-data)
 
-### 编码规范
-
-- 默认按 TypeScript `strict` 心智写代码；优先复用当前作用域已声明的变量、函数、类型和导入，禁止引用未声明标识符或拼错变量名。
-- 禁止隐式 `any` 和 `as any`；函数参数、返回值、解构项、事件对象、`catch` 错误在使用前应有明确类型或先完成类型收窄，并清理未使用的变量和导入。
-
-### next.config 配置规范
-
-- 配置的路径不要写死绝对路径，必须使用 path.resolve(__dirname, ...)、import.meta.dirname 或 process.cwd() 动态拼接。
-
-### Hydration 问题防范
-
-1. 严禁在 JSX 渲染逻辑中直接使用 typeof window、Date.now()、Math.random() 等动态数据。**必须使用 'use client' 并配合 useEffect + useState 确保动态内容仅在客户端挂载后渲染**；同时严禁非法 HTML 嵌套（如 <p> 嵌套 <div>）。
-2. **禁止使用 head 标签**，优先使用 metadata，详见文档：https://nextjs.org/docs/app/api-reference/functions/generate-metadata
-   1. 三方 CSS、字体等资源可在 `globals.css` 中顶部通过 `@import` 引入或使用 next/font
-   2. preload, preconnect, dns-prefetch 通过 ReactDOM 的 preload、preconnect、dns-prefetch 方法引入
-   3. json-ld 可阅读 https://nextjs.org/docs/app/guides/json-ld
-
-## UI 设计与组件规范 (UI & Styling Standards)
-
-- 模板默认预装核心组件库 `shadcn/ui`，位于`src/components/ui/`目录下
-- Next.js 项目**必须默认**采用 shadcn/ui 组件、风格和规范，**除非用户指定用其他的组件和规范。**
+## 安全注意事项
+- 文件上传限制 50MB，仅接受 CSV
+- Python 后端无鉴权（内网代理）
+- torch 为可选依赖，缺失时降级为物理规则评分

@@ -1,0 +1,16 @@
+# 赛道级虚拟赛车教练 - Python 后端依赖
+# FastAPI 服务框架
+fastapi>=0.110.0
+uvicorn[standard]>=0.29.0
+python-multipart>=0.0.9
+
+# 数据处理
+pandas>=2.2.0
+numpy>=1.26.0
+scipy>=1.12.0
+
+# 深度学习 (CPU 版本，沙箱环境适配)
+torch>=2.2.0
+
+# 工具库
+pydantic>=2.6.0
