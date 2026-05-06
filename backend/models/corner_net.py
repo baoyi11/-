@@ -21,96 +21,88 @@ except ImportError:
     F = None  # type: ignore
 
 
-class CornerLSTMNet:
-    """
-    基于双层 BiLSTM 的弯道动态评价网络。
-
-    输入:  (batch, seq_len, feature_dim)
-    输出:  (batch, num_classes) 的 logits
-           num_classes = 3 -> [转向不足 Understeer, 转向过度 Oversteer, 完美附着力 Perfect]
-    """
-
-    def __init__(
-        self,
-        input_dim: int = 6,
-        hidden_dim: int = 128,
-        num_layers: int = 2,
-        num_classes: int = 3,
-        dropout: float = 0.3,
-    ):
-        if not _HAS_TORCH:
-            raise RuntimeError("PyTorch 未安装，无法初始化 CornerLSTMNet")
-
-        super(CornerLSTMNet, self).__init__()
-        self.input_dim = input_dim
-        self.hidden_dim = hidden_dim
-        self.num_layers = num_layers
-        self.num_classes = num_classes
-
-        # 双层双向 LSTM，捕捉前后向时序依赖
-        self.lstm = nn.LSTM(
-            input_size=input_dim,
-            hidden_size=hidden_dim,
-            num_layers=num_layers,
-            batch_first=True,
-            bidirectional=True,
-            dropout=dropout if num_layers > 1 else 0.0,
-        )
-
-        # 时序注意力：给不同时间步分配不同权重
-        self.attention = nn.Sequential(
-            nn.Linear(hidden_dim * 2, 64),
-            nn.Tanh(),
-            nn.Linear(64, 1),
-        )
-
-        # 分类头
-        self.classifier = nn.Sequential(
-            nn.Linear(hidden_dim * 2, 128),
-            nn.ReLU(),
-            nn.Dropout(dropout),
-            nn.Linear(128, num_classes),
-        )
-
-    def forward(self, x):
+if _HAS_TORCH:
+    class CornerLSTMNet(nn.Module):
         """
-        Args:
-            x: Tensor of shape (batch, seq_len, input_dim)
-        Returns:
-            logits: Tensor of shape (batch, num_classes)
+        基于双层 BiLSTM 的弯道动态评价网络。
+
+        输入:  (batch, seq_len, feature_dim)
+        输出:  (batch, num_classes) 的 logits
+               num_classes = 3 -> [转向不足 Understeer, 转向过度 Oversteer, 完美附着力 Perfect]
         """
-        # LSTM 输出: (batch, seq_len, hidden_dim * 2)
-        lstm_out, _ = self.lstm(x)
 
-        # 注意力权重: (batch, seq_len, 1)
-        attn_weights = F.softmax(self.attention(lstm_out), dim=1)
+        def __init__(
+            self,
+            input_dim: int = 6,
+            hidden_dim: int = 128,
+            num_layers: int = 2,
+            num_classes: int = 3,
+            dropout: float = 0.3,
+        ):
+            super(CornerLSTMNet, self).__init__()
+            self.input_dim = input_dim
+            self.hidden_dim = hidden_dim
+            self.num_layers = num_layers
+            self.num_classes = num_classes
 
-        # 加权求和得到上下文向量: (batch, hidden_dim * 2)
-        context = torch.sum(attn_weights * lstm_out, dim=1)
+            # 双层双向 LSTM，捕捉前后向时序依赖
+            self.lstm = nn.LSTM(
+                input_size=input_dim,
+                hidden_size=hidden_dim,
+                num_layers=num_layers,
+                batch_first=True,
+                bidirectional=True,
+                dropout=dropout if num_layers > 1 else 0.0,
+            )
 
-        # 分类
-        logits = self.classifier(context)
-        return logits
+            # 时序注意力：给不同时间步分配不同权重
+            self.attention = nn.Sequential(
+                nn.Linear(hidden_dim * 2, 64),
+                nn.Tanh(),
+                nn.Linear(64, 1),
+            )
 
-    def predict_proba(self, x):
-        """返回各类别的概率分布"""
-        self.eval()
-        with torch.no_grad():
-            logits = self.forward(x)
-            probs = F.softmax(logits, dim=-1)
-        return probs
+            # 分类头
+            self.classifier = nn.Sequential(
+                nn.Linear(hidden_dim * 2, 128),
+                nn.ReLU(),
+                nn.Dropout(dropout),
+                nn.Linear(128, num_classes),
+            )
 
-    def to(self, device):
-        return self
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            """
+            Args:
+                x: Tensor of shape (batch, seq_len, input_dim)
+            Returns:
+                logits: Tensor of shape (batch, num_classes)
+            """
+            # LSTM 输出: (batch, seq_len, hidden_dim * 2)
+            lstm_out, _ = self.lstm(x)
 
-    def eval(self):
-        pass
+            # 注意力权重: (batch, seq_len, 1)
+            attn_weights = F.softmax(self.attention(lstm_out), dim=1)
 
-    def load_state_dict(self, state_dict):
-        pass
+            # 加权求和得到上下文向量: (batch, hidden_dim * 2)
+            context = torch.sum(attn_weights * lstm_out, dim=1)
 
-    def state_dict(self):
-        return {}
+            # 分类
+            logits = self.classifier(context)
+            return logits
+
+        def predict_proba(self, x: torch.Tensor) -> torch.Tensor:
+            """返回各类别的概率分布"""
+            self.eval()
+            with torch.no_grad():
+                logits = self.forward(x)
+                probs = F.softmax(logits, dim=-1)
+            return probs
+else:
+    class CornerLSTMNet:
+        """PyTorch 未安装时的占位类，实例化会抛出 RuntimeError。"""
+
+        def __init__(self, *args, **kwargs):
+            raise RuntimeError("PyTorch 未安装，无法初始化 CornerLSTMNet。请执行: pip install torch")
 
 
 class TelemetryFeatureExtractor:
@@ -119,7 +111,7 @@ class TelemetryFeatureExtractor:
     将原始 CSV 列映射为模型输入张量/数组。
     """
 
-    FEATURE_COLS = [
+    FEATURE_COLUMNS = [
         "speed",
         "yaw_rate",
         "lat_g",
@@ -128,76 +120,130 @@ class TelemetryFeatureExtractor:
         "slip_ratio",
     ]
 
-    COL_ALIASES = {
-        "speed": ["speed", "velocity", "spd", "kmh", "km/h", "mps", "m/s"],
-        "yaw_rate": ["yaw_rate", "yawrate", "yaw", "yawr"],
-        "lat_g": ["lat_g", "lateral_g", "latg", "g_lat", "g_lateral", "ay"],
-        "long_g": ["long_g", "longitudinal_g", "longg", "g_long", "g_longitudinal", "ax"],
-        "steering_angle": ["steering_angle", "steering", "steer", "wheel_angle", "steeringangle"],
-        "slip_ratio": ["slip_ratio", "slipratio", "slip", "slip_rate"],
-    }
+    def __init__(self, seq_len: int = 60):
+        self.seq_len = seq_len
 
-    @classmethod
-    def normalize_columns(cls, df_cols):
-        """根据别名表将原始列名映射到标准特征名"""
-        lower_cols = {c.lower().replace(" ", "_"): c for c in df_cols}
+    def extract(self, df) -> np.ndarray:
+        """
+        从 pandas DataFrame 中提取特征矩阵。
+        返回 shape: (n_samples, seq_len, n_features) 的 numpy 数组。
+        """
+        import pandas as pd
+
+        features = []
+        for col in self.FEATURE_COLUMNS:
+            if col in df.columns:
+                features.append(df[col].values)
+            else:
+                features.append(np.zeros(len(df)))
+
+        mat = np.stack(features, axis=1).astype(np.float32)
+
+        # 归一化 (z-score)
+        mean = np.mean(mat, axis=0, keepdims=True)
+        std = np.std(mat, axis=0, keepdims=True) + 1e-6
+        mat = (mat - mean) / std
+
+        # 滑动窗口切分
+        windows = []
+        step = max(1, len(mat) // 20)
+        for i in range(0, len(mat) - self.seq_len + 1, step):
+            windows.append(mat[i : i + self.seq_len])
+
+        if not windows:
+            # 数据太短，直接 pad
+            if len(mat) < self.seq_len:
+                pad = np.zeros((self.seq_len - len(mat), mat.shape[1]), dtype=np.float32)
+                windows.append(np.concatenate([mat, pad], axis=0))
+            else:
+                windows.append(mat[: self.seq_len])
+
+        return np.stack(windows, axis=0)
+
+    def to_tensor(self, arr: np.ndarray) -> "torch.Tensor":
+        """将 numpy 数组转为 torch Tensor。"""
+        if _HAS_TORCH and torch is not None:
+            return torch.from_numpy(arr)
+        raise RuntimeError("PyTorch 未安装")
+
+    @staticmethod
+    def normalize_columns(columns):
+        """
+        将原始列名映射为标准化特征名。
+        返回字典 {标准化名: 原始列名}。
+        """
+        import pandas as pd
+        col_list = list(columns)
         mapping = {}
-        for std_name, aliases in cls.COL_ALIASES.items():
-            for alias in aliases:
-                if alias in lower_cols:
-                    mapping[std_name] = lower_cols[alias]
+        aliases = {
+            "speed": ["speed", "velocity", "vel", "spd", "km/h", "mph"],
+            "yaw_rate": ["yaw_rate", "yawrate", "yaw", "yaw_speed"],
+            "lat_g": ["lat_g", "lateral_g", "lat_acc", "g_lat", "g_force_lat", "ay"],
+            "long_g": ["long_g", "longitudinal_g", "long_acc", "g_long", "g_force_long", "ax"],
+            "steering_angle": ["steering_angle", "steer", "steering", "wheel_angle", "steer_deg"],
+            "slip_ratio": ["slip_ratio", "slip", "sliprate", "tire_slip"],
+        }
+        for std_name, aliases_list in aliases.items():
+            for col in col_list:
+                low = str(col).lower().replace(" ", "_").replace("(", "").replace(")", "")
+                if low in aliases_list:
+                    mapping[std_name] = col
                     break
         return mapping
 
     @classmethod
-    def extract_sequence(cls, df, col_mapping: dict, seq_len: int = 128):
+    def extract_sequence(cls, df, col_mapping, seq_len=128):
         """
-        从 DataFrame 中提取固定长度的特征序列。
-        返回 numpy ndarray (1, seq_len, input_dim) 或 torch Tensor
+        从 DataFrame 中提取固定长度的特征序列，用于模型输入。
+        返回 numpy ndarray 或 torch Tensor。
         """
         features = []
-        for std_name in cls.FEATURE_COLS:
-            col = col_mapping.get(std_name)
-            if col and col in df.columns:
-                series = df[col].fillna(0).to_numpy(dtype="float32")
+        for std_name in cls.FEATURE_COLUMNS:
+            raw_col = col_mapping.get(std_name)
+            if raw_col and raw_col in df.columns:
+                features.append(df[raw_col].values)
             else:
-                series = np.zeros(len(df), dtype="float32")
-            features.append(series)
+                features.append(np.zeros(len(df)))
 
         mat = np.stack(features, axis=1).astype(np.float32)
 
-        n, d = mat.shape
-        if n < seq_len:
-            pad = np.zeros((seq_len - n, d), dtype=np.float32)
-            mat = np.concatenate([mat, pad], axis=0)
-        elif n > seq_len:
-            indices = np.linspace(0, n - 1, seq_len).astype(np.int64)
-            mat = mat[indices]
-
-        # 标准化：每列减均值除标准差
-        mean = mat.mean(axis=0, keepdims=True)
-        std = mat.std(axis=0, keepdims=True) + 1e-6
+        # z-score 归一化
+        mean = np.mean(mat, axis=0, keepdims=True)
+        std = np.std(mat, axis=0, keepdims=True) + 1e-6
         mat = (mat - mean) / std
 
-        if _HAS_TORCH:
-            return torch.tensor(mat, dtype=torch.float32).unsqueeze(0)
-        return mat[np.newaxis, ...]
+        # 如果数据长度不足 seq_len，进行 pad；如果超过，均匀采样
+        if len(mat) < seq_len:
+            pad = np.zeros((seq_len - len(mat), mat.shape[1]), dtype=np.float32)
+            mat = np.concatenate([mat, pad], axis=0)
+        elif len(mat) > seq_len:
+            indices = np.linspace(0, len(mat) - 1, seq_len, dtype=np.int32)
+            mat = mat[indices]
+
+        # 增加 batch 维度 -> (1, seq_len, n_features)
+        mat = np.expand_dims(mat, axis=0)
+
+        if _HAS_TORCH and torch is not None:
+            return torch.from_numpy(mat)
+        return mat
 
 
 def build_model(
     input_dim: int = 6,
-    hidden_dim: int = 128,
+    hidden_dim: int = 64,
     num_layers: int = 2,
     num_classes: int = 3,
+    dropout: float = 0.3,
     device: str = "cpu",
-):
-    """工厂函数：构建模型"""
-    if not _HAS_TORCH:
-        return None
+) -> "CornerLSTMNet":
+    """工厂函数：构建并返回 CornerLSTMNet 实例。"""
     model = CornerLSTMNet(
         input_dim=input_dim,
         hidden_dim=hidden_dim,
         num_layers=num_layers,
         num_classes=num_classes,
+        dropout=dropout,
     )
+    if _HAS_TORCH and torch is not None:
+        model = model.to(torch.device(device))
     return model

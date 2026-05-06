@@ -38,12 +38,12 @@ from models.corner_net import CornerLSTMNet, TelemetryFeatureExtractor
 # ==================== 超参数 ====================
 SEED = 42
 INPUT_DIM = 6
-HIDDEN_DIM = 128
+HIDDEN_DIM = 64
 NUM_LAYERS = 2
 NUM_CLASSES = 3
 SEQ_LEN = 128
-BATCH_SIZE = 64
-EPOCHS = 80
+BATCH_SIZE = 128
+EPOCHS = 25
 LR = 1e-3
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 MODEL_SAVE_PATH = "models/corner_net.pth"
@@ -298,8 +298,8 @@ def train():
     print(f"Model: CornerLSTMNet (input={INPUT_DIM}, hidden={HIDDEN_DIM}, layers={NUM_LAYERS})")
 
     # 数据集
-    train_dataset = MockTelemetryDataset(n_samples=6000, seq_len=SEQ_LEN)
-    val_dataset = MockTelemetryDataset(n_samples=1200, seq_len=SEQ_LEN)
+    train_dataset = MockTelemetryDataset(n_samples=2000, seq_len=SEQ_LEN)
+    val_dataset = MockTelemetryDataset(n_samples=400, seq_len=SEQ_LEN)
 
     train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True, num_workers=0)
     val_loader = DataLoader(val_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=0)
