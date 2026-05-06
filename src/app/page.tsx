@@ -346,7 +346,9 @@ export default function HomePage() {
                 {/* Selected Corner Detail */}
                 {selectedCorner && (
                   <CornerDetailPanel
-                    corner={selectedCorner}
+                    corners={result.corners}
+                    selectedCorner={selectedCorner}
+                    onSelectCorner={(c) => setSelectedCorner(c)}
                     onClose={() => setSelectedCorner(null)}
                   />
                 )}
