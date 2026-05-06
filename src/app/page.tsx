@@ -223,6 +223,98 @@ export default function HomePage() {
                     />
                   </div>
                 </div>
+
+                {/* Corner Score List */}
+                <div className="bg-slate-900/40 border border-slate-800 rounded-xl p-4">
+                  <h2 className="text-sm font-bold text-slate-200 flex items-center gap-2 mb-3">
+                    <ChevronRight className="w-4 h-4 text-cyan-400" />
+                    弯道评分总览
+                  </h2>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+                    {result.corners.map((corner) => {
+                      const color =
+                        corner.scores.total >= 85
+                          ? '#10b981'
+                          : corner.scores.total >= 70
+                          ? '#22d3ee'
+                          : corner.scores.total >= 55
+                          ? '#f59e0b'
+                          : '#ef4444';
+                      const label =
+                        corner.scores.total >= 85
+                          ? '完美'
+                          : corner.scores.total >= 70
+                          ? '良好'
+                          : corner.scores.total >= 55
+                          ? '一般'
+                          : '危险';
+                      return (
+                        <button
+                          key={corner.corner_id}
+                          onClick={() => setSelectedCorner(corner)}
+                          className={`text-left rounded-xl border p-3 transition-all hover:scale-[1.02] ${
+                            selectedCorner?.corner_id === corner.corner_id
+                              ? 'border-cyan-500/50 bg-cyan-500/10'
+                              : 'border-slate-700/50 bg-slate-800/40 hover:bg-slate-800/60'
+                          }`}
+                        >
+                          <div className="flex items-center gap-3">
+                            <div
+                              className="w-12 h-12 rounded-xl flex items-center justify-center text-lg font-black shrink-0"
+                              style={{
+                                backgroundColor: color + '20',
+                                color: color,
+                                border: `2px solid ${color}`,
+                              }}
+                            >
+                              {Math.round(corner.scores.total)}
+                            </div>
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2">
+                                <span className="text-sm font-bold text-slate-200">
+                                  弯道 #{corner.corner_id}
+                                </span>
+                                <span
+                                  className="text-[10px] px-1.5 py-0.5 rounded font-bold"
+                                  style={{
+                                    backgroundColor: color + '20',
+                                    color: color,
+                                  }}
+                                >
+                                  {label}
+                                </span>
+                              </div>
+                              <p className="text-xs text-slate-400 mt-0.5 truncate">
+                                {corner.ai_class || '未知'}
+                              </p>
+                            </div>
+                          </div>
+                          <p className="text-xs text-slate-300 mt-2 leading-relaxed line-clamp-2">
+                            {corner.one_liner}
+                          </p>
+                          <div className="flex gap-3 mt-2 pt-2 border-t border-slate-700/30">
+                            <div className="text-[10px]">
+                              <span className="text-slate-500">刹车</span>
+                              <span className="text-slate-300 ml-1 font-semibold">{Math.round(corner.scores.braking)}</span>
+                            </div>
+                            <div className="text-[10px]">
+                              <span className="text-slate-500">弯心</span>
+                              <span className="text-slate-300 ml-1 font-semibold">{Math.round(corner.scores.mid_speed)}</span>
+                            </div>
+                            <div className="text-[10px]">
+                              <span className="text-slate-500">油门</span>
+                              <span className="text-slate-300 ml-1 font-semibold">{Math.round(corner.scores.throttle)}</span>
+                            </div>
+                            <div className="text-[10px]">
+                              <span className="text-slate-500">走线</span>
+                              <span className="text-slate-300 ml-1 font-semibold">{Math.round(corner.scores.racing_line)}</span>
+                            </div>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
               </div>
 
               {/* Right: Feedback + Radar + Friction Circle */}
