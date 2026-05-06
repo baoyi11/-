@@ -4,7 +4,8 @@ import React from 'react';
 import dynamic from 'next/dynamic';
 
 // Plotly 组件需要动态导入以避免 SSR 问题
-const Plot = dynamic(() => import('react-plotly.js'), { ssr: false });
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const Plot = (dynamic(() => import('react-plotly.js'), { ssr: false }) as any);
 
 interface FrictionCircleProps {
   latG: number[];

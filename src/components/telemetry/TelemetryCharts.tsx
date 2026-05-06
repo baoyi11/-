@@ -3,7 +3,8 @@
 import React, { useMemo } from 'react';
 import dynamic from 'next/dynamic';
 
-const Plot = dynamic(() => import('react-plotly.js'), { ssr: false });
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const Plot = (dynamic(() => import('react-plotly.js'), { ssr: false }) as any);
 
 interface TelemetryData {
   distance?: number[];
