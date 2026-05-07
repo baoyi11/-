@@ -1,146 +1,146 @@
 'use client';
 
 import React from 'react';
-import { Gauge, AlertTriangle, Trophy, Flag, ThumbsUp, Zap } from 'lucide-react';
+import { Trophy, AlertTriangle, Zap, Target, Gauge, Route } from 'lucide-react';
 
-interface FeedbackPanelProps {
-  feedback: {
-    tier: string;
-    title: string;
-    summary: string;
-    roast: string;
-    full_text: string;
-    overall_score: number;
-    dimension_scores: {
-      braking?: number;
-      mid_speed?: number;
-      throttle?: number;
-      racing_line?: number;
-    };
-    worst_dimension: string | null;
-    worst_dimension_score: number;
-  };
+interface DimensionScores {
+  braking?: number;
+  mid_speed?: number;
+  throttle?: number;
+  racing_line?: number;
 }
 
-const tierMeta: Record<string, { label: string; icon: React.ReactNode; color: string; glow: string }> = {
-  Alien: {
-    label: '外星人附体',
-    icon: <Trophy className="w-5 h-5" />,
-    color: '#00c896',
-    glow: '0 0 30px rgba(0,200,150,0.15)',
-  },
-  Takumi: {
-    label: '秋名山车神',
-    icon: <Zap className="w-5 h-5" />,
-    color: '#38bdf8',
-    glow: '0 0 30px rgba(56,189,248,0.15)',
-  },
-  'Trackday Warrior': {
-    label: '赛道日战士',
-    icon: <ThumbsUp className="w-5 h-5" />,
-    color: '#f59e0b',
-    glow: '0 0 30px rgba(245,158,11,0.15)',
-  },
-  'Dynamic Hazard': {
-    label: '动态路障',
-    icon: <AlertTriangle className="w-5 h-5" />,
-    color: '#f97316',
-    glow: '0 0 30px rgba(249,115,22,0.15)',
-  },
-  'Mobile Chicane': {
-    label: '移动减速带',
-    icon: <Flag className="w-5 h-5" />,
-    color: '#ef4444',
-    glow: '0 0 30px rgba(239,68,68,0.15)',
-  },
-};
+interface FeedbackData {
+  tier: string;
+  title: string;
+  summary: string;
+  roast: string;
+  full_text: string;
+  overall_score: number;
+  dimension_scores: DimensionScores;
+  worst_dimension: string | null;
+  worst_dimension_score: number;
+  corner_count: number;
+}
 
-export default function FeedbackPanel({ feedback: fb }: FeedbackPanelProps) {
-  const meta = tierMeta[fb.tier] || tierMeta['Trackday Warrior'];
-  const overallScore = fb.overall_score;
+interface FeedbackPanelProps {
+  feedback: FeedbackData | null;
+}
 
-  const dims = [
-    { key: 'braking', label: '刹车', score: fb.dimension_scores.braking ?? 0 },
-    { key: 'mid_speed', label: '弯速', score: fb.dimension_scores.mid_speed ?? 0 },
-    { key: 'throttle', label: '油门', score: fb.dimension_scores.throttle ?? 0 },
-    { key: 'racing_line', label: '走线', score: fb.dimension_scores.racing_line ?? 0 },
-  ];
+function scoreColor(score: number): string {
+  if (score >= 85) return 'text-emerald-400';
+  if (score >= 70) return 'text-cyan-400';
+  if (score >= 55) return 'text-amber-400';
+  return 'text-red-400';
+}
 
+function scoreBg(score: number): string {
+  if (score >= 85) return 'bg-emerald-500/10 border-emerald-500/30';
+  if (score >= 70) return 'bg-cyan-500/10 border-cyan-500/30';
+  if (score >= 55) return 'bg-amber-500/10 border-amber-500/30';
+  return 'bg-red-500/10 border-red-500/30';
+}
+
+function DimensionCard({
+  label,
+  score,
+  icon,
+}: {
+  label: string;
+  score: number;
+  icon: React.ReactNode;
+}) {
   return (
     <div
-      className="rounded-lg border border-[#1a1a28] bg-[#0c0c12] overflow-hidden"
-      style={{ boxShadow: meta.glow }}
+      className={`flex items-center gap-3 px-3 py-2.5 rounded-lg border ${scoreBg(score)}`}
     >
-      {/* Header */}
-      <div className="px-5 py-4 border-b border-[#1a1a28] flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Gauge className="w-4 h-4 text-[#5a5a68]" />
-          <span className="text-xs font-medium text-[#5a5a68] tracking-wider uppercase">
-            整体评价
-          </span>
-        </div>
+      <div className="text-slate-400">{icon}</div>
+      <div className="flex-1">
+        <p className="text-xs text-slate-400">{label}</p>
+        <p className={`text-lg font-bold ${scoreColor(score)}`}>{score}</p>
+      </div>
+    </div>
+  );
+}
+
+export default function FeedbackPanel({ feedback }: FeedbackPanelProps) {
+  if (!feedback) {
+    return (
+      <div className="w-full h-full flex flex-col items-center justify-center text-slate-500 gap-2">
+        <Gauge className="w-8 h-8 opacity-50" />
+        <p className="text-sm">上传遥测数据以获取评价</p>
+      </div>
+    );
+  }
+
+  const ds = feedback.dimension_scores || {};
+
+  return (
+    <div className="w-full space-y-4">
+      {/* 总分展示 */}
+      <div className="flex items-center gap-4">
         <div
-          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-semibold"
-          style={{
-            backgroundColor: `${meta.color}12`,
-            color: meta.color,
-            border: `1px solid ${meta.color}20`,
-          }}
+          className={`w-20 h-20 rounded-full flex items-center justify-center border-2 ${scoreBg(
+            feedback.overall_score
+          )}`}
         >
-          {meta.icon}
-          {meta.label}
+          <div className="text-center">
+            <p className={`text-2xl font-black ${scoreColor(feedback.overall_score)}`}>
+              {feedback.overall_score}
+            </p>
+            <p className="text-[10px] text-slate-400">总分</p>
+          </div>
+        </div>
+        <div className="flex-1">
+          <div className="flex items-center gap-2 mb-1">
+            <Trophy className="w-4 h-4 text-amber-400" />
+            <h3 className="text-lg font-bold text-slate-100">{feedback.title}</h3>
+          </div>
+          <p className="text-xs text-slate-400">
+            共分析 {feedback.corner_count} 个弯道
+          </p>
         </div>
       </div>
 
-      <div className="p-5">
-        {/* Big Score */}
-        <div className="flex items-baseline gap-3 mb-5">
-          <span
-            className="font-mono-data text-5xl font-bold tracking-tighter"
-            style={{ color: meta.color }}
-          >
-            {overallScore.toFixed(1)}
-          </span>
-          <span className="text-xs text-[#5a5a68]">/ 100</span>
-        </div>
+      {/* 维度卡片 */}
+      <div className="grid grid-cols-2 gap-2">
+        <DimensionCard
+          label="刹车技术"
+          score={ds.braking ?? 0}
+          icon={<AlertTriangle className="w-4 h-4" />}
+        />
+        <DimensionCard
+          label="弯心速度"
+          score={ds.mid_speed ?? 0}
+          icon={<Zap className="w-4 h-4" />}
+        />
+        <DimensionCard
+          label="油门控制"
+          score={ds.throttle ?? 0}
+          icon={<Gauge className="w-4 h-4" />}
+        />
+        <DimensionCard
+          label="走线精准"
+          score={ds.racing_line ?? 0}
+          icon={<Route className="w-4 h-4" />}
+        />
+      </div>
 
-        {/* Dimension bars */}
-        <div className="grid grid-cols-4 gap-3 mb-5">
-          {dims.map((d) => {
-            const pct = Math.max(0, Math.min(100, d.score));
-            return (
-              <div key={d.key} className="text-center">
-                <div className="text-[10px] text-[#5a5a68] mb-1.5 tracking-wider uppercase">
-                  {d.label}
-                </div>
-                <div className="font-mono-data text-lg font-semibold text-[#e8e8ed]">
-                  {d.score.toFixed(0)}
-                </div>
-                <div className="mt-1.5 h-1 bg-[#13131c] rounded-full overflow-hidden">
-                  <div
-                    className="h-full rounded-full transition-all duration-700"
-                    style={{
-                      width: `${pct}%`,
-                      backgroundColor:
-                        pct >= 90
-                          ? '#00c896'
-                          : pct >= 75
-                            ? '#38bdf8'
-                            : pct >= 60
-                              ? '#f59e0b'
-                              : '#ef4444',
-                    }}
-                  />
-                </div>
-              </div>
-            );
-          })}
+      {/* 总评文案 */}
+      <div className="bg-slate-800/50 rounded-xl border border-slate-700 p-4">
+        <div className="flex items-center gap-2 mb-2">
+          <Target className="w-4 h-4 text-cyan-400" />
+          <h4 className="text-sm font-semibold text-slate-200">教练点评</h4>
         </div>
-
-        {/* Feedback text */}
-        <div className="rounded-md bg-[#13131c] border border-[#1a1a28] p-3.5">
-          <p className="text-sm text-[#9a9aa8] leading-relaxed">{fb.full_text}</p>
-        </div>
+        <p className="text-sm text-slate-300 leading-relaxed">{feedback.summary}</p>
+        {feedback.roast && (
+          <div className="mt-3 pt-3 border-t border-slate-700">
+            <p className="text-xs text-amber-400 font-medium mb-1">精准吐槽</p>
+            <p className="text-sm text-slate-300 leading-relaxed italic">
+              &ldquo;{feedback.roast}&rdquo;
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -1,16 +1,9 @@
 'use client';
 
-import React from 'react';
-import { Radar } from 'lucide-react';
+import React, { useMemo } from 'react';
 
 interface RadarChartProps {
-  data?: {
-    braking: number;
-    midSpeed: number;
-    throttle: number;
-    racingLine: number;
-  };
-  scores?: {
+  scores: {
     braking?: number;
     mid_speed?: number;
     throttle?: number;
@@ -18,166 +11,150 @@ interface RadarChartProps {
   };
 }
 
-export default function RadarChart({ data, scores }: RadarChartProps) {
-  const values = data
-    ? [data.braking, data.midSpeed, data.throttle, data.racingLine]
-    : [
-        scores?.braking ?? 0,
-        scores?.mid_speed ?? 0,
-        scores?.throttle ?? 0,
-        scores?.racing_line ?? 0,
-      ];
-  const labels = ['刹车', '弯速', '油门', '走线'];
-  const maxVal = 100;
+export default function DimensionRadarChart({ scores }: RadarChartProps) {
+  const svgRef = React.useRef<SVGSVGElement>(null);
 
-  const cx = 180;
-  const cy = 160;
-  const r = 100;
-  const angleStep = (Math.PI * 2) / 4;
+  const dimensions = useMemo(
+    () => [
+      { label: '刹车技术', value: scores.braking ?? 50 },
+      { label: '弯心速度', value: scores.mid_speed ?? 50 },
+      { label: '油门控制', value: scores.throttle ?? 50 },
+      { label: '走线精准', value: scores.racing_line ?? 50 },
+    ],
+    [scores]
+  );
 
-  const getPoint = (idx: number, val: number) => {
-    const angle = -Math.PI / 2 + idx * angleStep;
-    const ratio = val / maxVal;
-    return {
-      x: cx + r * ratio * Math.cos(angle),
-      y: cy + r * ratio * Math.sin(angle),
-    };
-  };
+  const svgSize = 300;
+  const cx = svgSize / 2;
+  const cy = svgSize / 2;
+  const maxRadius = 110;
+  const levels = 5;
+  const maxValue = 100;
 
-  const getAxisPoint = (idx: number) => {
-    const angle = -Math.PI / 2 + idx * angleStep;
+  const angleSlice = (Math.PI * 2) / dimensions.length;
+
+  // Compute polygon points
+  const points = dimensions.map((d, i) => {
+    const angle = i * angleSlice - Math.PI / 2;
+    const r = (d.value / maxValue) * maxRadius;
     return {
       x: cx + r * Math.cos(angle),
       y: cy + r * Math.sin(angle),
     };
-  };
+  });
 
-  const points = values.map((v, i) => getPoint(i, v));
-  const pathD = `M ${points.map((p) => `${p.x},${p.y}`).join(' L ')} Z`;
+  const polygonPoints = points.map((p) => `${p.x},${p.y}`).join(' ');
 
-  const axisEndPoints = labels.map((_, i) => getAxisPoint(i));
+  // Grid circles
+  const gridCircles = Array.from({ length: levels }, (_, i) => {
+    const r = ((i + 1) / levels) * maxRadius;
+    return { r, value: ((i + 1) / levels) * maxValue };
+  });
 
-  const gridRings = [20, 40, 60, 80, 100];
-
-  const getScoreColor = (score: number) => {
-    if (score >= 90) return '#00c896';
-    if (score >= 75) return '#38bdf8';
-    if (score >= 60) return '#f59e0b';
-    return '#ef4444';
-  };
-
-  const avgScore = values.reduce((a, b) => a + b, 0) / values.length;
-  const mainColor = getScoreColor(avgScore);
+  // Axis end points
+  const axisEnds = dimensions.map((d, i) => {
+    const angle = i * angleSlice - Math.PI / 2;
+    return {
+      x: cx + maxRadius * Math.cos(angle),
+      y: cy + maxRadius * Math.sin(angle),
+      labelX: cx + (maxRadius + 20) * Math.cos(angle),
+      labelY: cy + (maxRadius + 20) * Math.sin(angle),
+      label: d.label,
+      value: d.value,
+    };
+  });
 
   return (
-    <div className="rounded-lg border border-[#1a1a28] bg-[#0c0c12] overflow-hidden">
-      <div className="px-4 py-3 border-b border-[#1a1a28] flex items-center gap-2">
-        <Radar className="w-4 h-4 text-[#5a5a68]" />
-        <span className="text-xs font-medium text-[#5a5a68] tracking-wider uppercase">
-          维度雷达
-        </span>
-      </div>
-      <div className="p-5 flex justify-center">
-        <svg viewBox="0 0 360 320" className="w-full max-w-[360px]">
-          {/* Grid rings */}
-          {gridRings.map((ring) => {
-            const ringPoints = labels.map((_, i) => {
-              const ratio = ring / maxVal;
-              const angle = -Math.PI / 2 + i * angleStep;
-              return `${cx + r * ratio * Math.cos(angle)},${cy + r * ratio * Math.sin(angle)}`;
-            });
-            return (
-              <polygon
-                key={ring}
-                points={ringPoints.join(' ')}
-                fill="none"
-                stroke="#1a1a28"
-                strokeWidth="1"
-                strokeDasharray={ring < 100 ? '2 4' : 'none'}
-              />
-            );
-          })}
-
-          {/* Axis lines */}
-          {axisEndPoints.map((p, i) => (
-            <line
-              key={i}
-              x1={cx}
-              y1={cy}
-              x2={p.x}
-              y2={p.y}
-              stroke="#1a1a28"
-              strokeWidth="1"
-            />
-          ))}
-
-          {/* Axis labels */}
-          {axisEndPoints.map((p, i) => {
-            const dx = p.x - cx;
-            const dy = p.y - cy;
-            const dist = Math.sqrt(dx * dx + dy * dy);
-            const labelX = cx + (dx / dist) * (r + 22);
-            const labelY = cy + (dy / dist) * (r + 22);
-            return (
-              <text
-                key={i}
-                x={labelX}
-                y={labelY}
-                textAnchor="middle"
-                dominantBaseline="middle"
-                className="text-[11px]"
-                fill="#5a5a68"
-              >
-                {labels[i]}
-              </text>
-            );
-          })}
-
-          {/* Value labels */}
-          {points.map((p, i) => {
-            const dx = p.x - cx;
-            const dy = p.y - cy;
-            const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-            const labelX = cx + (dx / dist) * (dist + 14);
-            const labelY = cy + (dy / dist) * (dist + 14);
-            return (
-              <text
-                key={i}
-                x={labelX}
-                y={labelY}
-                textAnchor="middle"
-                dominantBaseline="middle"
-                className="font-mono-data text-xs font-bold"
-                fill={getScoreColor(values[i])}
-              >
-                {values[i].toFixed(0)}
-              </text>
-            );
-          })}
-
-          {/* Data polygon */}
-          <polygon
-            points={points.map((p) => `${p.x},${p.y}`).join(' ')}
-            fill={mainColor}
-            fillOpacity="0.12"
-            stroke={mainColor}
-            strokeWidth="2"
+    <div className="w-full flex justify-center items-center" style={{ height: 280 }}>
+      <svg ref={svgRef} width={svgSize} height={svgSize} viewBox={`0 0 ${svgSize} ${svgSize}`}>
+        {/* Grid circles */}
+        {gridCircles.map((g, idx) => (
+          <circle
+            key={`grid-${idx}`}
+            cx={cx}
+            cy={cy}
+            r={g.r}
+            fill="none"
+            stroke="rgba(148,163,184,0.15)"
+            strokeWidth={1}
           />
+        ))}
 
-          {/* Data points */}
-          {points.map((p, i) => (
-            <circle
-              key={i}
-              cx={p.x}
-              cy={p.y}
-              r="4"
-              fill={mainColor}
-              stroke="#0c0c12"
-              strokeWidth="2"
-            />
-          ))}
-        </svg>
-      </div>
+        {/* Grid radial lines */}
+        {axisEnds.map((a, idx) => (
+          <line
+            key={`axis-${idx}`}
+            x1={cx}
+            y1={cy}
+            x2={a.x}
+            y2={a.y}
+            stroke="rgba(148,163,184,0.15)"
+            strokeWidth={1}
+          />
+        ))}
+
+        {/* Value labels on vertical axis */}
+        {gridCircles.map((g, idx) => (
+          <text
+            key={`tick-${idx}`}
+            x={cx + 4}
+            y={cy - g.r + 4}
+            fontSize={9}
+            fill="#64748b"
+          >
+            {Math.round(g.value)}
+          </text>
+        ))}
+
+        {/* Data polygon */}
+        <polygon
+          points={polygonPoints}
+          fill="rgba(34,211,238,0.25)"
+          stroke="#22d3ee"
+          strokeWidth={2}
+        />
+
+        {/* Data points */}
+        {points.map((p, idx) => (
+          <circle
+            key={`point-${idx}`}
+            cx={p.x}
+            cy={p.y}
+            r={4}
+            fill="#22d3ee"
+            stroke="#0f172a"
+            strokeWidth={2}
+          />
+        ))}
+
+        {/* Axis labels */}
+        {axisEnds.map((a, idx) => (
+          <g key={`label-${idx}`}>
+            <text
+              x={a.labelX}
+              y={a.labelY}
+              textAnchor="middle"
+              dominantBaseline="middle"
+              fontSize={12}
+              fill="#94a3b8"
+              fontWeight={500}
+            >
+              {a.label}
+            </text>
+            <text
+              x={a.labelX}
+              y={a.labelY + 14}
+              textAnchor="middle"
+              dominantBaseline="middle"
+              fontSize={10}
+              fill="#22d3ee"
+              fontWeight={600}
+            >
+              {Math.round(a.value)}
+            </text>
+          </g>
+        ))}
+      </svg>
     </div>
   );
 }

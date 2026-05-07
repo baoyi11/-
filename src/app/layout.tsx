@@ -1,47 +1,55 @@
 import type { Metadata } from 'next';
-import { Inter, JetBrains_Mono } from 'next/font/google';
 import { Inspector } from 'react-dev-inspector';
 import './globals.css';
 
-const inter = Inter({
-  subsets: ['latin'],
-  weight: ['300', '400', '500', '600', '700'],
-  variable: '--font-inter',
-  display: 'swap',
-});
-
-const jetbrainsMono = JetBrains_Mono({
-  subsets: ['latin'],
-  weight: ['400', '500', '600', '700'],
-  variable: '--font-mono',
-  display: 'swap',
-});
-
 export const metadata: Metadata = {
-  title: 'TrackMaster AI Coach | 赛道级虚拟赛车教练',
+  title: {
+    default: '新应用 | 扣子编程',
+    template: '%s | 扣子编程',
+  },
   description:
-    '基于时序遥测数据的弯道动态评价系统。上传赛车游戏 CSV 遥测数据，AI 自动切分弯道、评估驾驶表现并生成专业反馈。',
+    '扣子编程是一款一站式云端 Vibe Coding 开发平台。通过对话轻松构建智能体、工作流和网站，实现从创意到上线的无缝衔接。',
   keywords: [
-    '赛车教练',
-    '遥测数据分析',
-    '弯道评价',
-    '驾驶评分',
-    'AI 赛车',
-    'Assetto Corsa',
-    'F1',
-    '赛车模拟器',
+    '扣子编程',
+    'Coze Code',
+    'Vibe Coding',
+    'AI 编程',
+    '智能体搭建',
+    '工作流搭建',
+    '网站搭建',
+    '网站部署',
+    '全栈开发',
+    'AI 工程师',
   ],
-  authors: [{ name: 'TrackMaster', url: 'https://code.coze.cn' }],
+  authors: [{ name: 'Coze Code Team', url: 'https://code.coze.cn' }],
   generator: 'Coze Code',
+  // icons: {
+  //   icon: '',
+  // },
   openGraph: {
-    title: 'TrackMaster AI Coach | 赛道级虚拟赛车教练',
+    title: '扣子编程 | 你的 AI 工程师已就位',
     description:
-      '上传赛车遥测 CSV，AI 自动分析每个弯道的刹车、弯速、油门和走线表现。',
+      '我正在使用扣子编程 Vibe Coding，让创意瞬间上线。告别拖拽，拥抱心流。',
     url: 'https://code.coze.cn',
-    siteName: 'TrackMaster AI Coach',
+    siteName: '扣子编程',
     locale: 'zh_CN',
     type: 'website',
+    // images: [
+    //   {
+    //     url: '',
+    //     width: 1200,
+    //     height: 630,
+    //     alt: '扣子编程 - 你的 AI 工程师',
+    //   },
+    // ],
   },
+  // twitter: {
+  //   card: 'summary_large_image',
+  //   title: 'Coze Code | Your AI Engineer is Here',
+  //   description:
+  //     'Build and deploy full-stack applications through AI conversation. No env setup, just flow.',
+  //   // images: [''],
+  // },
   robots: {
     index: true,
     follow: true,
@@ -56,8 +64,8 @@ export default function RootLayout({
   const isDev = process.env.COZE_PROJECT_ENV === 'DEV';
 
   return (
-    <html lang="zh-CN" className={`dark ${inter.variable} ${jetbrainsMono.variable}`}>
-      <body className="antialiased bg-[#06060a] text-[#e8e8ed] font-sans">
+    <html lang="en" className="dark">
+      <body className={`antialiased bg-[#0a0a0f] text-[#e8e8ed]`}>
         {isDev && <Inspector />}
         {children}
       </body>
