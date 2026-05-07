@@ -130,9 +130,13 @@ class TelemetryFeatureExtractor:
         self.seq_len = seq_len
         self.scaler = None
         if scaler_path and os.path.exists(scaler_path):
-            import pickle
-            with open(scaler_path, "rb") as f:
-                self.scaler = pickle.load(f)
+            try:
+                import pickle
+                with open(scaler_path, "rb") as f:
+                    self.scaler = pickle.load(f)
+            except Exception as e:
+                print(f"[WARN] Failed to load scaler from {scaler_path}: {e}")
+                self.scaler = None
 
     def _normalize(self, mat: np.ndarray) -> np.ndarray:
         """使用训练时保存的 StandardScaler 或在线 z-score 归一化。"""
