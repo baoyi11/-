@@ -61,9 +61,15 @@ function proxyWithHttp(
 
     proxyReq.on('error', (err) => {
       console.error('[API Proxy] HTTP proxy error:', err);
+      const isRefused = String(err).includes('ECONNREFUSED');
       resolve(
         NextResponse.json(
-          { error: 'Python backend unavailable', detail: String(err) },
+          {
+            error: 'Python backend unavailable',
+            detail: isRefused
+              ? '后端分析服务未启动。请检查部署配置中是否已安装 Python 依赖 (pip3 install -r backend/requirements.txt)。'
+              : String(err),
+          },
           { status: 503 }
         )
       );

@@ -56,6 +56,12 @@ function startPythonBackend(): Promise<void> {
       reject(err);
     });
 
+    py.on('exit', (code) => {
+      if (code !== 0 && code !== null) {
+        console.error(`[Server] Python backend exited with code ${code}`);
+      }
+    });
+
     // 等待 Uvicorn 启动成功
     const checkInterval = setInterval(() => {
       if (stdoutBuf.includes('Uvicorn running') || stderrBuf.includes('Uvicorn running')) {
@@ -68,7 +74,9 @@ function startPythonBackend(): Promise<void> {
     // 超时处理
     setTimeout(() => {
       clearInterval(checkInterval);
-      console.warn('[Server] Python backend start timeout, continuing anyway...');
+      if (!stdoutBuf.includes('Uvicorn running') && !stderrBuf.includes('Uvicorn running')) {
+        console.warn('[Server] Python backend start timeout. stdout:', stdoutBuf.slice(0, 200), 'stderr:', stderrBuf.slice(0, 200));
+      }
       resolve();
     }, 15000);
   });
