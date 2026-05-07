@@ -190,7 +190,7 @@ def _physics_based_scoring(
     slip_exit = slip[exit_start_rel:]
 
     # ---------- 1. 刹车技术评分 ----------
-    braking_score = 70.0
+    braking_score = 75.0
     brake_too_early = False
     brake_too_late = False
 
@@ -198,26 +198,32 @@ def _physics_based_scoring(
         max_brake = np.abs(long_g_entry.clip(max=0)).max()
         # 理想：入弯有持续且平滑的刹车，然后逐渐释放（Trail-braking）
         if max_brake > 0.3:
-            braking_score += 10.0
+            braking_score += 15.0
             # 检查刹车是否过早结束（Trail-braking 不足）
-            brake_end_idx = np.where(long_g_entry < -0.05)[0]
+            # 在整个弯道中查找刹车结束点，避免被 entry_end_rel 截断导致误判
+            brake_end_idx = np.where(long_g < -0.05)[0]
             if len(brake_end_idx) > 0:
                 last_brake = brake_end_idx[-1]
-                if last_brake < len(long_g_entry) * 0.3:
+                if last_brake < n * 0.2:
                     braking_score -= 20.0
                     brake_too_early = True
-                elif last_brake > len(long_g_entry) * 0.9:
+                elif last_brake > n * 0.7:
                     braking_score -= 15.0
                     brake_too_late = True
+                else:
+                    # 刹车结束位置完美，额外加分
+                    braking_score += 10.0
         else:
             # 刹车太弱
             braking_score -= 15.0
+            if max_brake < 0.1:
+                braking_score -= 10.0
 
         # 抱死检测：刹车时滑移率异常高
         if slip_col and len(slip) > 0:
-            brake_mask = long_g[:entry_end_rel] < -0.1
+            brake_mask = long_g < -0.1
             if brake_mask.any():
-                avg_slip_under_brake = slip[:entry_end_rel][brake_mask].mean()
+                avg_slip_under_brake = slip[brake_mask].mean()
                 if avg_slip_under_brake > 15.0:
                     braking_score -= 20.0
                     brake_too_late = True  # 抱死视为刹车过晚/过猛
@@ -227,7 +233,7 @@ def _physics_based_scoring(
     braking_score = float(np.clip(braking_score, 0, 100))
 
     # ---------- 2. 弯心速度评分 ----------
-    mid_speed_score = 70.0
+    mid_speed_score = 75.0
     over_slow = False
 
     if len(speed_apex) > 0:
@@ -236,9 +242,11 @@ def _physics_based_scoring(
         if len(speed_entry) > 0:
             entry_speed = float(speed_entry.mean())
             speed_drop_ratio = (entry_speed - min_speed) / (entry_speed + 1e-3)
-            # 理想：速度下降 15%-40%
-            if 0.15 <= speed_drop_ratio <= 0.40:
+            # 理想：速度下降 20%-35%
+            if 0.20 <= speed_drop_ratio <= 0.35:
                 mid_speed_score += 20.0
+                # 完美弯心速度，额外加分
+                mid_speed_score += 10.0
             elif speed_drop_ratio > 0.55:
                 mid_speed_score -= 25.0
                 over_slow = True
@@ -250,7 +258,7 @@ def _physics_based_scoring(
     mid_speed_score = float(np.clip(mid_speed_score, 0, 100))
 
     # ---------- 3. 油门控制评分 ----------
-    throttle_score = 70.0
+    throttle_score = 75.0
     throttle_choppy = False
     throttle_too_early = False
 
@@ -262,9 +270,12 @@ def _physics_based_scoring(
             # 检查是否断断续续（方差大）
             if len(accel) > 2:
                 accel_std = accel.std()
-                if accel_std > 0.15:
+                if accel_std > 0.25:
                     throttle_score -= 20.0
                     throttle_choppy = True
+                elif accel_std < 0.10 and accel.max() > 0.4:
+                    # 油门非常线性且给油果断，额外加分
+                    throttle_score += 10.0
 
             # 过早全油门导致打滑
             if slip_col and len(slip_exit) > 0:
@@ -295,11 +306,13 @@ def _physics_based_scoring(
         racing_line_score += (steer_smoothness - 0.5) * 30.0
 
     # 弯心速度是否是最低点（判断有没有错过弯心）
+    # 如果全局最小值在弯道的前 25% 或后 25%，视为错过弯心
     if len(speed) > 0:
         global_min_idx = int(np.argmin(speed))
-        apex_start = entry_end_rel
-        apex_end = exit_start_rel
-        if not (apex_start <= global_min_idx <= apex_end):
+        if global_min_idx < n * 0.25:
+            racing_line_score -= 20.0
+            missed_apex = True
+        elif global_min_idx > n * 0.75:
             racing_line_score -= 20.0
             missed_apex = True
 
