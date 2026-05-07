@@ -88,6 +88,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.1.1",
     "only-allow": "^1.2.2",
+    "puppeteer": "^24.43.0",
     "react-dev-inspector": "^2.0.1",
     "shadcn": "latest",
     "tailwindcss": "^4",
