@@ -1,9 +1,21 @@
 'use client';
 
-import React, { useState, useRef, useEffect } from 'react';
-import { X, ChevronLeft, ChevronRight, AlertCircle, CheckCircle2, ChevronDown } from 'lucide-react';
+import React from 'react';
+import {
+  ChevronLeft,
+  ChevronRight,
+  Clock,
+  Gauge,
+  Crosshair,
+  AlertTriangle,
+  CheckCircle2,
+  XCircle,
+  Timer,
+  Wind,
+  Navigation,
+} from 'lucide-react';
 
-interface CornerResult {
+export interface CornerResult {
   corner_id: number;
   ai_class: string;
   ai_confidence: number;
@@ -16,269 +28,369 @@ interface CornerResult {
   };
   flags: Record<string, boolean>;
   one_liner: string;
+  meta: Record<string, unknown>;
+  phase_stats: Record<string, unknown>;
   indices: {
     start: number;
     end: number;
   };
-  meta: Record<string, unknown>;
-  phase_stats: Record<string, unknown>;
 }
+
+// Legacy fallback interface for backward compatibility
+interface LegacyCornerResult {
+  number: number;
+  corner_id?: number;
+  entry_speed: number;
+  apex_speed: number;
+  exit_speed: number;
+  score: number;
+  braking_score?: number;
+  mid_speed_score?: number;
+  throttle_score?: number;
+  racing_line_score?: number;
+  ai_classification?: string;
+  feedback?: string;
+  flags?: Record<string, boolean>;
+  entry_duration?: number;
+  apex_duration?: number;
+  exit_duration?: number;
+  avg_lateral_g?: number;
+  avg_steering_angle?: number;
+  meta?: {
+    corner_number: number;
+    overall_score: number;
+    tier: string;
+    flags?: Record<string, boolean>;
+  };
+  phase_stats?: {
+    entry_speed: number;
+    apex_speed: number;
+    exit_speed: number;
+    entry_duration: number;
+    apex_duration: number;
+    exit_duration: number;
+    avg_lateral_g: number;
+    avg_steering_angle: number;
+  };
+}
+
+type AnyCornerResult = CornerResult | LegacyCornerResult;
 
 interface CornerDetailPanelProps {
-  corners: CornerResult[];
-  selectedCorner: CornerResult | null;
-  onSelectCorner: (corner: CornerResult) => void;
-  onClose: () => void;
+  corner?: CornerResult;
+  onPrev?: () => void;
+  onNext?: () => void;
+  hasPrev?: boolean;
+  hasNext?: boolean;
+  corners?: CornerResult[];
+  selectedCorner?: CornerResult | null;
+  onSelectCorner?: (corner: CornerResult | null) => void;
+  onClose?: () => void;
 }
 
-function scoreColor(score: number): string {
-  if (score >= 85) return 'text-emerald-400';
-  if (score >= 70) return 'text-cyan-400';
-  if (score >= 55) return 'text-amber-400';
-  return 'text-red-400';
-}
+const FLAG_LABELS: Record<string, string> = {
+  brake_too_early: '刹车过早',
+  brake_too_late_or_lockup: '刹车过晚/抱死',
+  throttle_choppy: '油门断续',
+  throttle_too_early_full: '过早全油门',
+  missed_apex: '错过弯心',
+  over_slow: '过度减速',
+};
 
-function scoreBgColor(score: number): string {
-  if (score >= 85) return 'bg-emerald-500/20 text-emerald-400';
-  if (score >= 70) return 'bg-cyan-500/20 text-cyan-400';
-  if (score >= 55) return 'bg-amber-500/20 text-amber-400';
-  return 'bg-red-500/20 text-red-400';
-}
-
-function aiClassLabel(cls: string): string {
-  if (cls === 'Perfect') return '完美';
-  if (cls === 'Oversteer') return '转向过度';
-  if (cls === 'Understeer') return '转向不足';
-  return cls;
-}
-
-function FlagItem({ active, label }: { active: boolean; label: string }) {
-  return (
-    <div className={`flex items-center gap-1.5 text-xs ${active ? 'text-red-400' : 'text-slate-500'}`}>
-      {active ? <AlertCircle className="w-3.5 h-3.5 shrink-0" /> : <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />}
-      <span>{label}</span>
-    </div>
-  );
-}
+const FLAG_ORDER = [
+  'brake_too_early',
+  'brake_too_late_or_lockup',
+  'throttle_choppy',
+  'throttle_too_early_full',
+  'missed_apex',
+  'over_slow',
+];
 
 export default function CornerDetailPanel({
-  corners,
+  corner: cornerProp,
+  onPrev,
+  onNext,
+  hasPrev,
+  hasNext,
+  corners = [],
   selectedCorner,
   onSelectCorner,
   onClose,
 }: CornerDetailPanelProps) {
-  const [showDropdown, setShowDropdown] = useState(false);
-  const dropdownRef = useRef<HTMLDivElement>(null);
+  const rawCorner = (selectedCorner ?? cornerProp) as AnyCornerResult;
+  const isLegacy = 'score' in rawCorner && !('scores' in rawCorner);
+  const corner = rawCorner as CornerResult;
+  const legacy = rawCorner as LegacyCornerResult;
 
-  useEffect(() => {
-    function handleClickOutside(e: MouseEvent) {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
-        setShowDropdown(false);
+  const meta = (corner?.meta || legacy?.meta || {}) as Record<string, unknown>;
+  const ps = (corner?.phase_stats || legacy?.phase_stats || {}) as Record<string, unknown>;
+
+  const scoreMap = isLegacy
+    ? {
+        braking: legacy.braking_score ?? 0,
+        midSpeed: legacy.mid_speed_score ?? 0,
+        throttle: legacy.throttle_score ?? 0,
+        racingLine: legacy.racing_line_score ?? 0,
+        total: legacy.score ?? 0,
       }
-    }
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
+    : {
+        braking: corner.scores?.braking ?? 0,
+        midSpeed: corner.scores?.mid_speed ?? 0,
+        throttle: corner.scores?.throttle ?? 0,
+        racingLine: corner.scores?.racing_line ?? 0,
+        total: corner.scores?.total ?? 0,
+      };
 
-  if (!selectedCorner || corners.length === 0) return null;
+  const aiClass = isLegacy
+    ? (legacy.ai_classification || (meta as Record<string, string>).ai_classification || 'Unknown')
+    : (corner.ai_class || (meta as Record<string, string>).ai_classification || 'Unknown');
+  const aiLabel =
+    aiClass === 'Understeer'
+      ? { text: '转向不足', color: '#f59e0b' }
+      : aiClass === 'Oversteer'
+        ? { text: '转向过度', color: '#ef4444' }
+        : aiClass === 'Perfect'
+          ? { text: '完美', color: '#00c896' }
+          : { text: '未知', color: '#5a5a68' };
 
-  const currentIdx = corners.findIndex((c) => c.corner_id === selectedCorner.corner_id);
-  const hasPrev = currentIdx > 0;
-  const hasNext = currentIdx < corners.length - 1;
+  const tier =
+    scoreMap.total >= 95
+      ? { text: '外星人附体', color: '#00c896' }
+      : scoreMap.total >= 85
+        ? { text: '秋名山车神', color: '#38bdf8' }
+        : scoreMap.total >= 70
+          ? { text: '赛道日战士', color: '#f59e0b' }
+          : scoreMap.total >= 60
+            ? { text: '动态路障', color: '#f97316' }
+            : { text: '移动减速带', color: '#ef4444' };
 
-  const s = selectedCorner.scores;
+  const dims = [
+    { label: '刹车', score: scoreMap.braking, key: 'braking' },
+    { label: '弯速', score: scoreMap.midSpeed, key: 'midSpeed' },
+    { label: '油门', score: scoreMap.throttle, key: 'throttle' },
+    { label: '走线', score: scoreMap.racingLine, key: 'racingLine' },
+    { label: '总分', score: scoreMap.total, key: 'total', highlight: true },
+  ];
+
+  const flags = isLegacy
+    ? (legacy.flags || (meta as { flags?: Record<string, boolean> }).flags || {})
+    : (corner.flags || {});
+  const activeFlags = FLAG_ORDER.filter(
+    (key) => flags[key]
+  );
+
+  const getPsNum = (key: string): number => {
+    const val = (ps as Record<string, unknown>)[key];
+    return typeof val === 'number' ? val : 0;
+  };
+
+  const statItems = [
+    {
+      icon: <Timer className="w-3.5 h-3.5" />,
+      label: '时长',
+      value: `${(getPsNum('entry_duration') + getPsNum('apex_duration') + getPsNum('exit_duration')).toFixed(2)}s`,
+    },
+    {
+      icon: <Gauge className="w-3.5 h-3.5" />,
+      label: '均速',
+      value: `${((getPsNum('entry_speed') + getPsNum('apex_speed') + getPsNum('exit_speed')) / 3).toFixed(1)}`,
+      unit: 'km/h',
+    },
+    {
+      icon: <Crosshair className="w-3.5 h-3.5" />,
+      label: '最大侧向G',
+      value: `${(getPsNum('avg_lateral_g') * 1.5).toFixed(1)}g`,
+    },
+    {
+      icon: <Navigation className="w-3.5 h-3.5" />,
+      label: '平均转向',
+      value: `${getPsNum('avg_steering_angle').toFixed(1)}deg`,
+    },
+  ];
+
+  const phases = [
+    { label: '入弯', speed: getPsNum('entry_speed'), duration: getPsNum('entry_duration') },
+    { label: '弯心', speed: getPsNum('apex_speed'), duration: getPsNum('apex_duration') },
+    { label: '出弯', speed: getPsNum('exit_speed'), duration: getPsNum('exit_duration') },
+  ];
 
   return (
-    <div className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden">
-      {/* 标题栏 + 弯道选择器 */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-slate-700 bg-slate-800/80">
+    <div className="rounded-lg border border-[#1a1a28] bg-[#0c0c12] overflow-hidden">
+      {/* Header */}
+      <div className="px-4 py-3 border-b border-[#1a1a28] flex items-center justify-between">
         <div className="flex items-center gap-2">
           <button
-            onClick={() => hasPrev && onSelectCorner(corners[currentIdx - 1])}
+            onClick={onPrev}
             disabled={!hasPrev}
-            className={`w-6 h-6 rounded flex items-center justify-center transition-colors ${
-              hasPrev ? 'hover:bg-slate-700 text-slate-400' : 'text-slate-600 cursor-not-allowed'
-            }`}
+            className="w-7 h-7 rounded flex items-center justify-center text-[#5a5a68] hover:text-[#e8e8ed] hover:bg-[#13131c] disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
           >
             <ChevronLeft className="w-4 h-4" />
           </button>
-
-          {/* 弯道选择下拉 */}
-          <div className="relative" ref={dropdownRef}>
-            <button
-              onClick={() => setShowDropdown(!showDropdown)}
-              className="flex items-center gap-1.5 px-2 py-1 rounded hover:bg-slate-700 transition-colors"
-            >
-              <h3 className="text-sm font-bold text-slate-100">
-                弯道 #{selectedCorner.corner_id}
-              </h3>
-              <ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform ${showDropdown ? 'rotate-180' : ''}`} />
-            </button>
-
-            {showDropdown && (
-              <div className="absolute top-full left-0 mt-1 w-56 bg-slate-900 border border-slate-600 rounded-lg shadow-xl z-50 max-h-[280px] overflow-y-auto">
-                {corners.map((corner) => {
-                  const isActive = corner.corner_id === selectedCorner.corner_id;
-                  const color =
-                    corner.scores.total >= 85
-                      ? '#10b981'
-                      : corner.scores.total >= 70
-                      ? '#22d3ee'
-                      : corner.scores.total >= 55
-                      ? '#f59e0b'
-                      : '#ef4444';
-                  return (
-                    <button
-                      key={corner.corner_id}
-                      onClick={() => {
-                        onSelectCorner(corner);
-                        setShowDropdown(false);
-                      }}
-                      className={`w-full text-left px-3 py-2 flex items-center gap-2 transition-colors ${
-                        isActive ? 'bg-cyan-500/10' : 'hover:bg-slate-800'
-                      }`}
-                    >
-                      <span
-                        className="w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold shrink-0"
-                        style={{
-                          backgroundColor: color + '20',
-                          color: color,
-                          border: `1.5px solid ${color}`,
-                        }}
-                      >
-                        {Math.round(corner.scores.total)}
-                      </span>
-                      <div className="min-w-0">
-                        <p className="text-xs font-semibold text-slate-200">
-                          弯道 #{corner.corner_id}
-                        </p>
-                        <p className="text-[10px] text-slate-500 truncate">
-                          {aiClassLabel(corner.ai_class)} · {corner.one_liner.slice(0, 20)}...
-                        </p>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-
-          <span
-            className={`text-xs font-bold px-2 py-0.5 rounded ${scoreBgColor(selectedCorner.scores.total)}`}
-          >
-            {aiClassLabel(selectedCorner.ai_class)}
+          <span className="text-sm font-semibold text-[#e8e8ed]">
+            弯道 #{corner.corner_id}
           </span>
-
           <button
-            onClick={() => hasNext && onSelectCorner(corners[currentIdx + 1])}
+            onClick={onNext}
             disabled={!hasNext}
-            className={`w-6 h-6 rounded flex items-center justify-center transition-colors ${
-              hasNext ? 'hover:bg-slate-700 text-slate-400' : 'text-slate-600 cursor-not-allowed'
-            }`}
+            className="w-7 h-7 rounded flex items-center justify-center text-[#5a5a68] hover:text-[#e8e8ed] hover:bg-[#13131c] disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
           >
             <ChevronRight className="w-4 h-4" />
           </button>
         </div>
 
-        <button
-          onClick={onClose}
-          className="text-slate-400 hover:text-slate-200 transition-colors"
-        >
-          <X className="w-4 h-4" />
-        </button>
+        <div className="flex items-center gap-2">
+          {corners.length > 0 && onSelectCorner && (
+            <select
+              value={typeof selectedCorner === 'number' ? selectedCorner : selectedCorner ? corners.indexOf(selectedCorner as CornerResult) : 0}
+              onChange={(e) => {
+                const idx = Number(e.target.value);
+                const c = corners[idx];
+                if (c) onSelectCorner(c as CornerResult);
+              }}
+              className="text-xs bg-[#13131c] border border-[#1a1a28] rounded px-2 py-1 text-[#e8e8ed] focus:outline-none focus:border-[#00c896]/50"
+            >
+              {corners.map((c, idx) => {
+                const raw = c as unknown as AnyCornerResult;
+                const isL = 'score' in raw && !('scores' in raw);
+                const s = isL ? (raw as LegacyCornerResult).score ?? 0 : (raw as CornerResult).scores?.total ?? 0;
+                const aic = isL
+                  ? (((raw as LegacyCornerResult).meta as Record<string, unknown>)?.ai_classification as string || 'Unknown')
+                  : ((raw as CornerResult).ai_class || 'Unknown');
+                const id = isL ? ((raw as LegacyCornerResult).number ?? (raw as LegacyCornerResult).corner_id) : (raw as CornerResult).corner_id;
+                return (
+                  <option key={idx} value={idx}>
+                    弯道 #{id} — {s.toFixed(0)}分 ({aic})
+                  </option>
+                );
+              })}
+            </select>
+          )}
+          <span
+            className="text-xs font-medium px-2 py-0.5 rounded"
+            style={{
+              backgroundColor: `${aiLabel.color}12`,
+              color: aiLabel.color,
+            }}
+          >
+            {aiLabel.text}
+          </span>
+        </div>
       </div>
 
       <div className="p-4 space-y-4">
-        {/* 分数条 */}
-        <div className="grid grid-cols-5 gap-2 text-center">
-          {[
-            { label: '刹车', val: s.braking },
-            { label: '弯速', val: s.mid_speed },
-            { label: '油门', val: s.throttle },
-            { label: '走线', val: s.racing_line },
-            { label: '总分', val: s.total },
-          ].map((item) => (
-            <div key={item.label} className="bg-slate-900/60 rounded-lg py-2">
-              <p className={`text-lg font-bold ${scoreColor(item.val)}`}>{item.val}</p>
-              <p className="text-[10px] text-slate-500">{item.label}</p>
+        {/* Score Cards */}
+        <div className="grid grid-cols-5 gap-2">
+          {dims.map((d) => (
+            <div
+              key={d.key}
+              className={`rounded-md p-2.5 text-center border ${
+                d.highlight
+                  ? 'bg-[#00c896]/5 border-[#00c896]/15'
+                  : 'bg-[#13131c] border-[#1a1a28]'
+              }`}
+            >
+              <div className="text-[10px] text-[#5a5a68] mb-1 tracking-wider uppercase">
+                {d.label}
+              </div>
+              <div
+                className={`font-mono-data text-lg font-bold ${
+                  d.highlight ? 'text-[#00c896]' : 'text-[#e8e8ed]'
+                }`}
+              >
+                {d.score.toFixed(1)}
+              </div>
             </div>
           ))}
         </div>
 
-        {/* 一句话评价 */}
-        <div className="bg-slate-900/40 rounded-lg px-3 py-2 border-l-2 border-cyan-500">
-          <p className="text-sm text-slate-300 italic">&ldquo;{selectedCorner.one_liner}&rdquo;</p>
+        {/* Tier & Feedback */}
+        <div className="flex items-center gap-2">
+          <span
+            className="text-xs font-semibold px-2 py-0.5 rounded"
+            style={{
+              backgroundColor: `${tier.color}12`,
+              color: tier.color,
+            }}
+          >
+            {tier.text}
+          </span>
         </div>
+        <p className="text-sm text-[#9a9aa8] leading-relaxed">
+          {(corner as unknown as Record<string, unknown>).feedback as string || (meta as Record<string, unknown>).feedback as string || '暂无评价'}
+        </p>
 
-        {/* 失误标记 */}
+        {/* Flags */}
         <div>
-          <p className="text-xs text-slate-500 mb-2">AI 检测到的特征</p>
-          <div className="grid grid-cols-2 gap-y-1.5">
-            <FlagItem active={selectedCorner.flags.brake_too_early} label="刹车过早" />
-            <FlagItem active={selectedCorner.flags.brake_too_late_or_lockup} label="刹车过晚/抱死" />
-            <FlagItem active={selectedCorner.flags.throttle_choppy} label="油门断续" />
-            <FlagItem active={selectedCorner.flags.throttle_too_early_full} label="过早全油门" />
-            <FlagItem active={selectedCorner.flags.missed_apex} label="错过弯心" />
-            <FlagItem active={selectedCorner.flags.over_slow} label="过度减速" />
+          <div className="text-[10px] text-[#5a5a68] mb-2 tracking-wider uppercase flex items-center gap-1">
+            <AlertTriangle className="w-3 h-3" />
+            AI 检测到的特征
+          </div>
+          <div className="grid grid-cols-2 gap-1.5">
+            {FLAG_ORDER.map((key) => {
+              const active = activeFlags.includes(key);
+              return (
+                <div
+                  key={key}
+                  className={`flex items-center gap-2 px-2.5 py-1.5 rounded-md text-xs border transition-colors ${
+                    active
+                      ? 'bg-red-500/5 border-red-500/20 text-red-300'
+                      : 'bg-[#13131c] border-[#1a1a28] text-[#5a5a68]'
+                  }`}
+                >
+                  {active ? (
+                    <XCircle className="w-3.5 h-3.5 shrink-0 text-red-400" />
+                  ) : (
+                    <CheckCircle2 className="w-3.5 h-3.5 shrink-0 text-[#1e1e28]" />
+                  )}
+                  <span>{FLAG_LABELS[key]}</span>
+                </div>
+              );
+            })}
           </div>
         </div>
 
-        {/* 弯段统计 */}
-        {Object.keys(selectedCorner.meta).length > 0 && (
-          <div>
-            <p className="text-xs text-slate-500 mb-2">弯道统计</p>
-            <div className="flex flex-wrap gap-2">
-              {selectedCorner.meta.duration_sec !== undefined && (
-                <span className="text-xs bg-slate-700/50 text-slate-300 px-2 py-1 rounded">
-                  时长: {String(selectedCorner.meta.duration_sec)}s
-                </span>
-              )}
-              {selectedCorner.meta.avg_speed !== undefined && (
-                <span className="text-xs bg-slate-700/50 text-slate-300 px-2 py-1 rounded">
-                  均速: {String(selectedCorner.meta.avg_speed)}
-                </span>
-              )}
-              {selectedCorner.meta.max_lat_g !== undefined && (
-                <span className="text-xs bg-slate-700/50 text-slate-300 px-2 py-1 rounded">
-                  最大侧向G: {String(selectedCorner.meta.max_lat_g)}g
-                </span>
-              )}
-              {selectedCorner.meta.avg_steering !== undefined && (
-                <span className="text-xs bg-slate-700/50 text-slate-300 px-2 py-1 rounded">
-                  平均转向: {String(selectedCorner.meta.avg_steering)}°
-                </span>
+        {/* Stats */}
+        <div className="grid grid-cols-4 gap-2">
+          {statItems.map((s) => (
+            <div
+              key={s.label}
+              className="rounded-md bg-[#13131c] border border-[#1a1a28] p-2.5 text-center"
+            >
+              <div className="flex items-center justify-center gap-1 text-[#5a5a68] mb-1">
+                {s.icon}
+                <span className="text-[10px] tracking-wider uppercase">{s.label}</span>
+              </div>
+              <div className="font-mono-data text-base font-semibold text-[#e8e8ed]">
+                {s.value}
+              </div>
+              {s.unit && (
+                <div className="text-[10px] text-[#5a5a68]">{s.unit}</div>
               )}
             </div>
-          </div>
-        )}
+          ))}
+        </div>
 
-        {/* 子阶段 */}
-        {Object.keys(selectedCorner.phase_stats).length > 0 && (
-          <div>
-            <p className="text-xs text-slate-500 mb-2">三阶段数据</p>
-            <div className="grid grid-cols-3 gap-2">
-              {(['entry', 'apex', 'exit'] as const).map((phase) => {
-                const meta = selectedCorner.phase_stats[`${phase}_meta`] as
-                  | { min_speed?: number; duration_sec?: number }
-                  | undefined;
-                if (!meta) return null;
-                return (
-                  <div key={phase} className="bg-slate-900/40 rounded-lg p-2 text-center">
-                    <p className="text-[10px] text-slate-500 uppercase">
-                      {phase === 'entry' ? '入弯' : phase === 'apex' ? '弯心' : '出弯'}
-                    </p>
-                    {meta.min_speed !== undefined && (
-                      <p className="text-xs text-slate-300">{meta.min_speed} km/h</p>
-                    )}
-                    {meta.duration_sec !== undefined && (
-                      <p className="text-[10px] text-slate-500">{meta.duration_sec}s</p>
-                    )}
-                  </div>
-                );
-              })}
+        {/* Phase stats */}
+        <div className="grid grid-cols-3 gap-2">
+          {phases.map((p) => (
+            <div
+              key={p.label}
+              className="rounded-md bg-[#13131c] border border-[#1a1a28] p-2.5 text-center"
+            >
+              <div className="text-[10px] text-[#5a5a68] mb-1 tracking-wider uppercase">
+                {p.label}
+              </div>
+              <div className="font-mono-data text-lg font-bold text-[#e8e8ed]">
+                {p.speed.toFixed(1)}
+              </div>
+              <div className="text-[10px] text-[#5a5a68]">km/h</div>
+              <div className="mt-1.5 text-[10px] text-[#5a5a68] flex items-center justify-center gap-1">
+                <Clock className="w-3 h-3" />
+                {p.duration.toFixed(2)}s
+              </div>
             </div>
-          </div>
-        )}
+          ))}
+        </div>
       </div>
     </div>
   );

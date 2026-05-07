@@ -4,9 +4,11 @@ import React, { useState, useCallback } from 'react';
 import { Activity, ChevronRight } from 'lucide-react';
 
 import UploadZone from '@/components/UploadZone';
-import TrackMap from '@/components/track/TrackMap';
-import FrictionCircle from '@/components/telemetry/FrictionCircle';
-import TelemetryCharts from '@/components/telemetry/TelemetryCharts';
+import dynamic from 'next/dynamic';
+
+const TrackMap = dynamic(() => import('@/components/track/TrackMap'), { ssr: false });
+const FrictionCircle = dynamic(() => import('@/components/telemetry/FrictionCircle'), { ssr: false });
+const TelemetryCharts = dynamic(() => import('@/components/telemetry/TelemetryCharts'), { ssr: false });
 import FeedbackPanel from '@/components/feedback/FeedbackPanel';
 import CornerDetailPanel from '@/components/feedback/CornerDetailPanel';
 import DimensionRadarChart from '@/components/RadarChart';

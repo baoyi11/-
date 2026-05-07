@@ -2,109 +2,117 @@
 
 import React from 'react';
 import dynamic from 'next/dynamic';
+import { Gauge } from 'lucide-react';
+import type Plotly from 'plotly.js';
 
-// Plotly 组件需要动态导入以避免 SSR 问题
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const Plot = (dynamic(() => import('react-plotly.js'), { ssr: false }) as any);
+const Plot = dynamic(() => import('react-plotly.js'), { ssr: false });
 
 interface FrictionCircleProps {
-  latG: number[];
+  lateralG?: number[];
   longG: number[];
+  speed?: number[];
+  latG?: number[];
 }
 
-export default function FrictionCircle({ latG, longG }: FrictionCircleProps) {
-  if (!latG?.length || !longG?.length) {
-    return (
-      <div className="w-full h-full flex items-center justify-center text-slate-500">
-        暂无 G 值数据
-      </div>
-    );
-  }
+const PLOT_CONFIG = {
+  displayModeBar: false,
+  responsive: true,
+};
 
-  // 计算颜色：根据时间渐变
-  const colors = latG.map((_, i) => i);
+export default function FrictionCircle({ lateralG, longG, speed, latG }: FrictionCircleProps) {
+  const lateralGData = latG ?? lateralG ?? [];
+  const speedData = speed ?? [];
+  const colorScale = speedData.length > 0
+    ? speedData.map((s) => {
+        const maxSpeed = Math.max(...speedData, 1);
+        return s / maxSpeed;
+      })
+    : lateralGData.map(() => 0.5);
 
-  const trace = {
-    x: longG,
-    y: latG,
-    mode: 'markers' as const,
-    type: 'scatter' as const,
-    marker: {
-      size: 4,
-      color: colors,
-      colorscale: 'Viridis' as const,
-      opacity: 0.7,
-      line: {
-        width: 0,
+  const traces: Plotly.Data[] = [
+    {
+      x: lateralGData,
+      y: longG,
+      mode: 'markers',
+      type: 'scatter',
+      marker: {
+        size: 4,
+        color: colorScale,
+        colorscale: 'Viridis',
+        showscale: true,
+        colorbar: {
+          title: { text: '速度', font: { size: 10, color: '#5a5a68' } },
+          tickfont: { size: 9, color: '#5a5a68' },
+          thickness: 12,
+          len: 0.6,
+        },
+        opacity: 0.7,
       },
-    },
-    text: colors.map((_, i) => `样本 #${i}`),
-    hovertemplate: '纵向 G: %{x:.3f}<br>侧向 G: %{y:.3f}<extra></extra>',
-  };
+      hovertemplate: '侧向G: %{x:.2f}g<br>纵向G: %{y:.2f}g<extra></extra>',
+    } as Plotly.Data,
+  ];
 
-  // 绘制理论摩擦圆
-  const theta = Array.from({ length: 100 }, (_, i) => (i / 100) * 2 * Math.PI);
-  const maxG = Math.max(
-    1.5,
-    Math.max(...latG.map(Math.abs), ...longG.map(Math.abs)) * 1.1
-  );
-
-  const circleTrace = {
-    x: theta.map((t) => maxG * Math.cos(t)),
-    y: theta.map((t) => maxG * Math.sin(t)),
-    mode: 'lines' as const,
-    type: 'scatter' as const,
-    line: {
-      color: 'rgba(148, 163, 184, 0.3)',
-      width: 2,
-      dash: 'dash' as const,
-    },
-    name: '理论极限',
-    hoverinfo: 'skip' as const,
-  };
-
-  const layout = {
-    paper_bgcolor: 'rgba(0,0,0,0)',
-    plot_bgcolor: 'rgba(0,0,0,0)',
-    font: {
-      color: '#94a3b8',
-      family: 'Inter, sans-serif',
-    },
-    margin: { t: 30, r: 20, b: 40, l: 40 },
+  const layout: Partial<Plotly.Layout> = {
+    paper_bgcolor: '#0c0c12',
+    plot_bgcolor: '#0c0c12',
+    font: { family: 'Inter, sans-serif', color: '#5a5a68' },
+    margin: { l: 50, r: 60, t: 10, b: 50 },
     xaxis: {
-      title: { text: '纵向 G (Longitudinal G)', font: { size: 12 } },
-      zeroline: true,
-      zerolinecolor: 'rgba(148,163,184,0.3)',
-      gridcolor: 'rgba(148,163,184,0.1)',
-      range: [-maxG, maxG],
+      title: { text: '侧向 G (g)', font: { size: 11, color: '#5a5a68' } },
+      gridcolor: '#1a1a28',
+      zerolinecolor: '#1a1a28',
+      tickfont: { size: 10 },
+      range: [-1.5, 1.5],
     },
     yaxis: {
-      title: { text: '侧向 G (Lateral G)', font: { size: 12 } },
-      zeroline: true,
-      zerolinecolor: 'rgba(148,163,184,0.3)',
-      gridcolor: 'rgba(148,163,184,0.1)',
-      range: [-maxG, maxG],
-      scaleanchor: 'x' as const,
-      scaleratio: 1,
+      title: { text: '纵向 G (g)', font: { size: 11, color: '#5a5a68' } },
+      gridcolor: '#1a1a28',
+      zerolinecolor: '#1a1a28',
+      tickfont: { size: 10 },
+      range: [-1.5, 1.5],
+      scaleanchor: 'x',
     },
-    showlegend: false,
-    hovermode: 'closest' as const,
-  };
-
-  const config = {
-    displayModeBar: false,
-    responsive: true,
+    hoverlabel: {
+      bgcolor: '#13131c',
+      bordercolor: '#1a1a28',
+      font: { color: '#e8e8ed', size: 11 },
+    },
+    shapes: [
+      {
+        type: 'circle',
+        xref: 'x',
+        yref: 'y',
+        x0: -1.2,
+        y0: -1.2,
+        x1: 1.2,
+        y1: 1.2,
+        line: { color: '#1a1a28', width: 1, dash: 'dot' },
+      },
+      {
+        type: 'circle',
+        xref: 'x',
+        yref: 'y',
+        x0: -1.0,
+        y0: -1.0,
+        x1: 1.0,
+        y1: 1.0,
+        line: { color: '#00c89630', width: 1.5 },
+      },
+    ],
+    height: 400,
   };
 
   return (
-    <div className="w-full h-full">
-      <Plot
-        data={[trace, circleTrace]}
-        layout={layout}
-        config={config}
-        style={{ width: '100%', height: '100%' }}
-        useResizeHandler
-      />
+    <div className="rounded-lg border border-[#1a1a28] bg-[#0c0c12] overflow-hidden">
+      <div className="px-4 py-3 border-b border-[#1a1a28] flex items-center gap-2">
+        <Gauge className="w-4 h-4 text-[#5a5a68]" />
+        <span className="text-xs font-medium text-[#5a5a68] tracking-wider uppercase">
+          G值摩擦圆
+        </span>
+      </div>
+      <div className="p-2">
+        <Plot data={traces} layout={layout} config={PLOT_CONFIG} style={{ width: '100%' }} />
+      </div>
     </div>
   );
 }
